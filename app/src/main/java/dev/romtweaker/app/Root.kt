@@ -5,7 +5,7 @@ object Root {
 
     fun su(cmd: String): Pair<Int, String> {
         return try {
-            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+            val p = Runtime.getRuntime().exec(Adapt.suCmd(cmd))
             val out = StringBuilder()
             val t = Thread {
                 try { out.append(p.inputStream.bufferedReader().readText()) } catch (e: Exception) {}

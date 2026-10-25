@@ -197,7 +197,7 @@ class MainActivity : Activity() {
         c2.addView(ui.heading("Root"))
         c2.addView(ui.body("Comprueba que la app tiene acceso root."))
         c2.addView(ui.button("Comprobar root", true) { exec("id; su -v 2>/dev/null") })
-        col.addView(c2)
+        col.addView(c2); col.addView(Actions.diagCard(this, ui))
 
         val c3 = ui.card()
         c3.addView(ui.heading("Apariencia de la app"))
@@ -273,19 +273,19 @@ class MainActivity : Activity() {
         c.addView(ui.hscroll(sr))
         c.addView(ui.button("Aplicar color", true) {
             selColor = hexOf(hexIn)
-            exec("settings put secure theme_customization_overlay_packages " + Root.q(themeJson("preset")))
+            Actions.color(this, themeJson("preset")) { say(it) }
         })
         c.addView(ui.button("Usar colores del fondo de pantalla") {
-            exec("settings put secure theme_customization_overlay_packages " + Root.q(themeJson("home_wallpaper")))
+            Actions.color(this, themeJson("home_wallpaper")) { say(it) }
         })
         col.addView(c)
 
         val m = ui.card()
         m.addView(ui.heading("Modo claro / oscuro"))
         val mr = ui.row()
-        mr.addView(ui.chip("Claro", false) { exec("cmd uimode night no") })
-        mr.addView(ui.chip("Oscuro", false) { exec("cmd uimode night yes") })
-        mr.addView(ui.chip("Automático", false) { exec("cmd uimode night auto") })
+        mr.addView(ui.chip("Claro", false) { Actions.night(this, "no") { say(it) } })
+        mr.addView(ui.chip("Oscuro", false) { Actions.night(this, "yes") { say(it) } })
+        mr.addView(ui.chip("Automático", false) { Actions.night(this, "auto") { say(it) } })
         m.addView(ui.hscroll(mr))
         col.addView(m)
     }
@@ -307,7 +307,7 @@ class MainActivity : Activity() {
 
     private fun loadOverlays(report: Boolean) {
         Thread {
-            val r = Root.su("cmd overlay list --user 0")
+            val r = Root.su("cmd overlay list --user 0").let { if (it.first == 0) it else { val t = Adapt.listOverlays(); if (t.isEmpty()) it else Pair(0, t) } }
             val l = if (r.first == 0) parseOverlays(r.second) else emptyList()
             runOnUiThread {
                 ovList = l
@@ -342,7 +342,7 @@ class MainActivity : Activity() {
         val pk = Root.q(o.pkg)
         val cmd = if (on) "cmd overlay enable-exclusive --user 0 --category " + pk + " || cmd overlay enable --user 0 " + pk
         else "cmd overlay disable --user 0 " + pk
-        exec(cmd) { loadOverlays(false) }
+        Actions.overlay(this, o.pkg, on) { msg -> say(msg); loadOverlays(false) }
     }
 
     private fun pageOverlays(): View = page { col ->
@@ -380,7 +380,7 @@ class MainActivity : Activity() {
     }
 
     // ---------------- SISTEMA ----------------
-    private fun setAnim(f: Float) {
+    private fun setAnim(f: Float) { Actions.anim(this, f) { say(it) }; return
         exec(
             "settings put global window_animation_scale " + f +
                 "; settings put global transition_animation_scale " + f +
@@ -397,7 +397,7 @@ class MainActivity : Activity() {
             return
         }
         if (!backup().contains(k)) backup().edit().putString(k, Root.prop(k)).apply()
-        exec(propCmd(k, v))
+        Actions.prop(this, k, v) { say(it) }
     }
 
     private fun restoreProps() {
@@ -436,9 +436,9 @@ class MainActivity : Activity() {
         d.addView(dpi)
         d.addView(ui.button("Aplicar DPI", true) {
             val n = dpi.text.toString().toIntOrNull()
-            if (n != null && n in 120..800) exec("wm density " + n) else say("DPI inválido (120-800)")
+            if (n != null && n in 120..800) Actions.dpi(this, n) { say(it) } else say("DPI inválido (120-800)")
         })
-        d.addView(ui.button("Restablecer DPI") { exec("wm density reset") })
+        d.addView(ui.button("Restablecer DPI") { Actions.dpiReset(this) { say(it) } })
         col.addView(d)
 
         val a = ui.card()
