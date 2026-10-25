@@ -42,7 +42,7 @@ object RomInfo {
     private fun readProps(): Map<String, String> {
         val map = HashMap<String, String>()
         val re = Regex("^\\[(.+?)\\]: \\[(.*)\\]")
-        for (l in Root.sh("getprop").lines()) {
+        for (l in Root.allProps().lines()) {
             val m = re.find(l.trim())
             if (m != null) map[m.groupValues[1]] = m.groupValues[2]
         }
@@ -96,7 +96,7 @@ object RomInfo {
         sb.append("Build: ").append(g("ro.build.display.id")).append('\n')
         sb.append("Incremental: ").append(g("ro.build.version.incremental")).append('\n')
         sb.append("Fecha de build: ").append(g("ro.build.date")).append('\n')
-        sb.append("Base: ").append(flavor).append('\n')
+        sb.append("Banda base: ").append(g("gsm.version.baseband")).appendLine(); sb.append("Parche proveedor: ").append(g("ro.vendor.build.security_patch")).appendLine(); sb.append("Base: ").append(flavor).append('\n')
         sb.append("Dispositivo: ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL)
             .append(" (").append(Build.DEVICE).append(")")
         return sb.toString()

@@ -29,5 +29,5 @@ object Root {
         }
     }
 
-    fun prop(k: String): String = sh("getprop " + q(k))
+    fun prop(k: String): String { val v = sh("getprop " + q(k)); return if (v.isNotEmpty()) v else su("getprop " + q(k)).second }; fun allProps(): String { val r = su("getprop"); if (r.first == 0) { if (r.second.isNotEmpty()) return r.second }; return sh("getprop") }
 }

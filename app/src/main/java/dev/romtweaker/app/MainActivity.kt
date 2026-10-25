@@ -190,7 +190,7 @@ class MainActivity : Activity() {
     private fun pageHome(): View = page { col ->
         val c1 = ui.card()
         c1.addView(ui.heading("Dispositivo"))
-        c1.addView(ui.body(RomInfo.summary()))
+        val inf = ui.body("Leyendo información…"); c1.addView(inf); Thread { val s = RomInfo.summary(); runOnUiThread { inf.text = s } }.start()
         col.addView(c1)
 
         val c2 = ui.card()
