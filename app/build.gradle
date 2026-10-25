@@ -2,15 +2,30 @@ plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
 }
+def rtKs = System.getenv('RT_KEYSTORE')
 android {
     namespace 'dev.romtweaker.app'
     compileSdk 34
     defaultConfig {
         applicationId 'dev.romtweaker.app'
-        minSdk 26
+        minSdk 29
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '2.0'
+    }
+    if (rtKs) {
+        signingConfigs {
+            rt {
+                storeFile file(rtKs)
+                storePassword 'android'
+                keyAlias 'key'
+                keyPassword 'android'
+                storeType 'pkcs12'
+            }
+        }
+        buildTypes {
+            debug { signingConfig signingConfigs.rt }
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

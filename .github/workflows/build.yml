@@ -14,6 +14,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Preparar firma
+        env:
+          KS: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/rt.p12"
+            echo "RT_KEYSTORE=$RUNNER_TEMP/rt.p12" >> "$GITHUB_ENV"
+          fi
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
