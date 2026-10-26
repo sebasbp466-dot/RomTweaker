@@ -22,6 +22,8 @@ jobs:
             echo "$KS" | base64 -d > "$RUNNER_TEMP/rt.p12"
             echo "RT_KEYSTORE=$RUNNER_TEMP/rt.p12" >> "$GITHUB_ENV"
           fi
+      - name: Generar overlays
+        run: bash tools/build_overlays.sh
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'

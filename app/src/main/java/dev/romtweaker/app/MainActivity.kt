@@ -347,7 +347,7 @@ class MainActivity : Activity() {
 
     private fun pageOverlays(): View = page { col ->
         val c = ui.card()
-        c.addView(ui.heading("Overlays de tu ROM"))
+        col.addView(ShapeLib.card(this, ui) { say(it) }); c.addView(ui.heading("Overlays de tu ROM"))
         c.addView(ui.body("Formas de iconos, fuentes, barra de navegación y más. Se activan y desactivan con root."))
         val filters = listOf("Todos" to "", "Iconos" to "icon", "Fuentes" to "font", "Navegación" to "nav", "Colores" to "color", "Temas" to "theme")
         val fr = ui.row()
