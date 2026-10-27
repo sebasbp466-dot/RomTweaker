@@ -37,7 +37,7 @@ class MainActivity : Activity() {
     private var ovList: List<Ov> = emptyList()
     private var ovBox: LinearLayout? = null
 
-    private val tabs = listOf("Inicio", "Colores", "Overlays", "Sistema", "Perfiles")
+    private val tabs = listOf("Inicio", "Colores", "Overlays", "Sistema", "Perfiles", "Interfaz")
     private val presets = listOf("6750A4", "B3261E", "E8590C", "F2A900", "2E7D32", "00897B", "0288D1", "1E3A8A", "8E24AA", "D81B60", "5D4037", "607D8B")
     private val styles = listOf("TONAL_SPOT", "VIBRANT", "EXPRESSIVE", "RAINBOW", "FRUIT_SALAD", "MONOCHROMATIC", "SPRITZ")
 
@@ -160,7 +160,8 @@ class MainActivity : Activity() {
             1 -> pageColors()
             2 -> pageOverlays()
             3 -> pageSystem()
-            else -> pageProfiles()
+            4 -> pageProfiles()
+            else -> TweakUi.page(this, ui) { say(it) }
         }
         content.addView(pg, FrameLayout.LayoutParams(MATCH, MATCH))
     }
