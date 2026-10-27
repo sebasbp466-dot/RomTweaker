@@ -117,7 +117,7 @@ object ShapeLib {
                 cell.addView(lb)
                 cell.setOnClickListener {
                     for (pr in views) pr.second.isSelected = (pr.first.id == s.id)
-                    ShapeOps.apply(act, s, report)
+                    ShapeOps2.apply(act, s, report)
                 }
                 row.addView(cell)
                 views.add(Pair(s, sv))
@@ -126,7 +126,7 @@ object ShapeLib {
         }
         c.addView(ui.button("Volver a la forma original") {
             for (pr in views) pr.second.isSelected = false
-            ShapeOps.reset(act, report)
+            ShapeOps2.reset(act, report)
         })
         Thread {
             val active = Adapt.listOverlays().lines().map { it.trim() }
