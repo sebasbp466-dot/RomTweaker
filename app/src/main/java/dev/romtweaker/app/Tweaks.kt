@@ -105,6 +105,7 @@ object TweakOps {
                 val e = ((n shl 8) or 2).toString()
                 listOf("0x05" to e, "dimension" to e)
             }
+            "color" -> listOf("color" to value, "0x1c" to value)
             "bool" -> listOf("boolean" to value, "0x12" to (if (value == "true") "0xffffffff" else "0x0"))
             else -> listOf("string" to value)
         }
@@ -180,12 +181,7 @@ object TweakUi {
         val intro = ui.card()
         intro.addView(ui.heading("Personalización del sistema"))
         intro.addView(ui.body("Overlays fabricados al instante con root, sin reiniciar. Cada ajuste solo se aplica si tu ROM tiene ese recurso."))
-        intro.addView(ui.button("Reiniciar SystemUI", true) {
-            Adapt.async(act, report) {
-                val r = Root.su("killall com.android.systemui || pkill -f com.android.systemui")
-                "SystemUI reiniciado (" + r.first + ")"
-            }
-        })
+        intro.addView(ui.button("Reiniciar SystemUI", true) { Actions.restartSystemUi(act, report) })
         intro.addView(ui.button("Quitar todos mis ajustes") { TweakOps.restore(act, null, report) })
         col.addView(intro)
 
@@ -209,10 +205,10 @@ object TweakUi {
 
         val cc = ui.card()
         cc.addView(ui.heading("Recurso personalizado"))
-        cc.addView(ui.body("Para probar cualquier recurso. Ej.: paquete com.android.systemui, recurso integer/quick_qs_panel_max_tiles, tipo int."))
+        cc.addView(ui.body("Para probar cualquier recurso. Ej.: paquete com.android.systemui, recurso integer/quick_qs_panel_max_tiles, tipo int. Tipos: string, int, dp, sp, bool, color (valor 0xAARRGGBB)."))
         val pkg = ui.input("Paquete, ej. com.android.systemui")
         val resIn = ui.input("Recurso, ej. integer/quick_qs_panel_max_tiles")
-        val type = ui.input("Tipo: string, int, dp, sp o bool")
+        val type = ui.input("Tipo: string, int, dp, sp, bool o color")
         type.setText("int")
         val value = ui.input("Valor")
         cc.addView(pkg)
@@ -242,6 +238,7 @@ object TweakUi {
             }
         })
         col.addView(cc)
+        col.addView(Explorer.card(act, ui, pkg, resIn, type, report))
 
         val sv = ScrollView(act)
         sv.isVerticalScrollBarEnabled = false

@@ -54,11 +54,11 @@ class MainActivity : Activity() {
         glass = uiPrefs().getBoolean("glass", false)
         ui = Ui(this, makePalette(this, glass))
         val p = ui.p
-        window.setBackgroundDrawable(ColorDrawable(p.bg))
+        Blur.apply(this, glass, p.bg)
         window.isNavigationBarContrastEnforced = false
 
         val frame = FrameLayout(this)
-        if (glass) frame.addView(ui.glassBackdrop(), FrameLayout.LayoutParams(MATCH, MATCH))
+        if (glass) frame.addView(ui.glassBackdrop().also { if (Blur.active(this)) it.background = null }, FrameLayout.LayoutParams(MATCH, MATCH))
         else frame.setBackgroundColor(p.bg)
 
         val main = LinearLayout(this)
@@ -198,7 +198,7 @@ class MainActivity : Activity() {
         c2.addView(ui.heading("Root"))
         c2.addView(ui.body("Comprueba que la app tiene acceso root."))
         c2.addView(ui.button("Comprobar root", true) { exec("id; su -v 2>/dev/null") })
-        col.addView(c2); col.addView(Actions.diagCard(this, ui))
+        col.addView(c2); col.addView(Actions.diagCard(this, ui)); col.addView(Extras.homeCards(this, ui, { logView.text.toString() }) { say(it) })
 
         val c3 = ui.card()
         c3.addView(ui.heading("Apariencia de la app"))
@@ -348,7 +348,7 @@ class MainActivity : Activity() {
 
     private fun pageOverlays(): View = page { col ->
         val c = ui.card()
-        col.addView(ShapeLib.card(this, ui) { say(it) }); c.addView(ui.heading("Overlays de tu ROM"))
+        col.addView(ShapeLib.card(this, ui) { say(it) }); col.addView(ExtOps.card(this, ui) { say(it) }); c.addView(ui.heading("Overlays de tu ROM"))
         c.addView(ui.body("Formas de iconos, fuentes, barra de navegación y más. Se activan y desactivan con root."))
         val filters = listOf("Todos" to "", "Iconos" to "icon", "Fuentes" to "font", "Navegación" to "nav", "Colores" to "color", "Temas" to "theme")
         val fr = ui.row()
