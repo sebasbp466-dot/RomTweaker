@@ -39,3 +39,4 @@ RES
     --out "$OUT/$id.apk" "$D/aligned.apk" </dev/null
 done < app/src/main/assets/shapes.txt
 echo "Overlays generados: $(ls "$OUT" | wc -l)"
+bash "$(dirname "${BASH_SOURCE[0]}")/build_iconify.sh" || true
