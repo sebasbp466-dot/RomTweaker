@@ -244,7 +244,7 @@ class HubActivity : Activity() {
             flow.addView(m.chip("Original", cur.isEmpty()) { clearGroup(g) })
             for (it2 in entry.value) {
                 val item = it2
-                flow.addView(m.chip(item.label, cur == item.label) { applyItem(item) })
+                flow.addView(IcoPreview.tile(this, m, item, cur == item.label) { applyItem(item) })
             }
             c.addView(flow, m.lp(m.MP, m.WC))
             add(p, c)
