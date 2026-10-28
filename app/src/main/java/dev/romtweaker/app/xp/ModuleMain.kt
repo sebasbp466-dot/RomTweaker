@@ -2,13 +2,17 @@ package dev.romtweaker.app.xp
 
 import android.content.SharedPreferences
 import android.util.Log
+import android.widget.TextView
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 
-/** Módulo LSPosed (libxposed API 101/102). Hooks mínimos y defensivos para SystemUI. */
+/** Módulo LSPosed (libxposed). Los hooks se buscan por estructura, no por nombres fijos de versión. */
 class ModuleMain : XposedModule() {
-    companion object { const val TAG = "RomTweaker" }
+    companion object {
+        const val TAG = "RomTweaker"
+        const val CLOCK = "com.android.systemui.statusbar.policy.Clock"
+    }
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         log(Log.INFO, TAG, "módulo cargado en ${param.processName}")
@@ -21,31 +25,43 @@ class ModuleMain : XposedModule() {
         hookClock(param.classLoader, prefs)
     }
 
+    private fun formatted(prefs: SharedPreferences?, orig: Any?): Any? {
+        val on = prefs?.getBoolean("clock_on", false) ?: false
+        val fmt = prefs?.getString("clock_fmt", "") ?: ""
+        if (!on || fmt.isEmpty()) return orig
+        return try { android.text.format.DateFormat.format(fmt, System.currentTimeMillis()) } catch (e: Throwable) { orig }
+    }
+
     private fun hookClock(cl: ClassLoader, prefs: SharedPreferences?) {
         try {
-            val c = Class.forName("com.android.systemui.statusbar.policy.Clock", false, cl)
-            var found: java.lang.reflect.Method? = null
+            val c = Class.forName(CLOCK, false, cl)
+            var target: java.lang.reflect.Method? = null
             for (x in c.declaredMethods) {
-                if (x.name == "getSmallTime" && x.parameterTypes.isEmpty()) found = x
-            }
-            val target = found
-            if (target == null) {
-                log(Log.WARN, TAG, "Clock.getSmallTime no existe en esta ROM")
-                return
-            }
-            hook(target).intercept { chain ->
-                val orig = chain.proceed()
-                val on = prefs?.getBoolean("clock_on", false) ?: false
-                val fmt = prefs?.getString("clock_fmt", "") ?: ""
-                if (on && fmt.isNotEmpty()) {
-                    try { android.text.format.DateFormat.format(fmt, System.currentTimeMillis()) } catch (e: Throwable) { orig }
-                } else {
-                    orig
+                if (x.parameterTypes.isEmpty() && CharSequence::class.java.isAssignableFrom(x.returnType) &&
+                    (x.name == "getSmallTime" || x.name.contains("Time", true))
+                ) {
+                    target = x
+                    if (x.name == "getSmallTime") break
                 }
             }
-            log(Log.INFO, TAG, "hook del reloj instalado")
-        } catch (t: Throwable) {
-            log(Log.ERROR, TAG, "no se pudo enganchar el reloj", t)
+            val t = target
+            if (t != null) {
+                hook(t).intercept { chain -> formatted(prefs, chain.proceed()) }
+                log(Log.INFO, TAG, "reloj enganchado por método: ${t.name}")
+                return
+            }
+            val st = TextView::class.java.getDeclaredMethod("setText", CharSequence::class.java, TextView.BufferType::class.java)
+            hook(st).intercept { chain ->
+                val self = chain.thisObject
+                if (self != null && self.javaClass.name == CLOCK) {
+                    chain.proceed(arrayOf(formatted(prefs, chain.args[0]), chain.args[1]))
+                } else {
+                    chain.proceed()
+                }
+            }
+            log(Log.INFO, TAG, "reloj enganchado por TextView.setText (plan B)")
+        } catch (e: Throwable) {
+            log(Log.WARN, TAG, "esta ROM no tiene el reloj esperado: ${e.message}")
         }
     }
 }

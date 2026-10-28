@@ -27,6 +27,7 @@ class HubActivity : Activity() {
     private var tab = 0
     private var items: List<IcoItem> = emptyList()
     private var rootState = "Comprobando…"
+    private var compat: List<SysFeature>? = null
     private val ui = Handler(Looper.getMainLooper())
     private val hide = Runnable { snack.visibility = View.GONE }
 
@@ -253,15 +254,24 @@ class HubActivity : Activity() {
     }
 
     // ---------- Xposed ----------
+    private fun saveClock(fmt: String, on: Boolean) {
+        hubPrefs.edit().putString("clock_fmt", fmt).putBoolean("clock_on", on).apply()
+        val ok = Xp.putString("clock_fmt", fmt) && Xp.putBool("clock_on", on)
+        say(if (ok) "Enviado a SystemUI" else "Guardado; conecta LSPosed para aplicarlo")
+    }
+
+    private fun sampleTime(pat: String): String =
+        try { android.text.format.DateFormat.format(pat, System.currentTimeMillis()).toString() } catch (e: Throwable) { "patrón inválido" }
+
     private fun pageXposed(): View {
-        val p = page("Xposed / LSPosed", "Funciones que necesitan hooks dentro de SystemUI")
+        val p = page("Xposed / LSPosed", "Hooks dentro de SystemUI, según lo que tenga tu ROM")
         val c = m.card()
         c.addView(m.tv("Estado", 18f, m.onSurface, true))
         c.addView(m.tv(Xp.status(), 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 10))
         val row = LinearLayout(this)
         row.addView(m.tonal("Abrir LSPosed") {
             val i = packageManager.getLaunchIntentForPackage("org.lsposed.manager")
-            if (i != null) startActivity(i) else say("Abre LSPosed desde su notificación o desde el marcador *#*#5776733#*#*")
+            if (i != null) startActivity(i) else say("Abre LSPosed desde su notificación")
         })
         row.addView(m.tonal("Reiniciar SystemUI") {
             Thread { Sx.su("killall com.android.systemui"); runOnUiThread { say("SystemUI reiniciado") } }.start()
@@ -269,25 +279,56 @@ class HubActivity : Activity() {
         c.addView(row)
         add(p, c)
 
+        val cc = m.card()
+        cc.addView(m.tv("Compatibilidad con tu ROM", 18f, m.onSurface, true))
+        val cs = compat
+        if (cs == null) {
+            cc.addView(m.tv("Analizando SystemUI…", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 0))
+            Thread {
+                val r = SysScan.features(this)
+                compat = r
+                runOnUiThread { if (tab == 2) refresh() }
+            }.start()
+        } else {
+            for (f in cs) {
+                val t = if (f.found) "✓ " + f.label + " · " + f.support else "✗ " + f.label + " · no existe en esta ROM"
+                cc.addView(m.tv(t, 13f, if (f.found) m.onSurface else m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 6, 0, 0))
+            }
+        }
+        add(p, cc)
+
         val c2 = m.card()
         c2.addView(m.tv("Reloj de la barra de estado", 18f, m.onSurface, true))
-        c2.addView(m.tv("Formato propio con patrón de fecha, p. ej. HH:mm:ss  o  EEE HH:mm", 13f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 2, 0, 10))
-        val f = m.field("HH:mm:ss", hubPrefs.getString("clock_fmt", "HH:mm") ?: "HH:mm")
-        c2.addView(m.switchRow("Activar formato propio", "", hubPrefs.getBoolean("clock_on", false)) { v ->
-            hubPrefs.edit().putBoolean("clock_on", v).apply()
-            say(if (Xp.putBool("clock_on", v)) "Guardado" else "Guardado local; conecta LSPosed para aplicarlo")
+        c2.addView(m.tv("Cada estilo muestra la hora real. Toca uno o escribe tu propio patrón.", 13f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 2, 0, 10))
+        val cur = hubPrefs.getString("clock_fmt", "HH:mm") ?: "HH:mm"
+        val f = m.field("HH:mm:ss", cur)
+        val pv = m.tv(sampleTime(cur), 26f, m.onSurface, true)
+        val flow = RtFlow(this, m.dp(8))
+        val presets = listOf("HH:mm", "HH:mm:ss", "h:mm a", "EEE HH:mm", "d MMM HH:mm", "EEE d MMM · HH:mm")
+        for (pt in presets) {
+            val pat = pt
+            flow.addView(m.chip(sampleTime(pat), cur == pat) {
+                f.setText(pat)
+                saveClock(pat, true)
+            })
+        }
+        c2.addView(flow, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        f.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) { pv.text = sampleTime(s.toString()) }
+            override fun afterTextChanged(s: android.text.Editable?) {}
         })
-        c2.addView(f, m.lp(m.MP, m.WC, 0, 10, 0, 10))
-        c2.addView(m.filled("Guardar formato") {
-            val s = f.text.toString()
-            hubPrefs.edit().putString("clock_fmt", s).apply()
-            say(if (Xp.putString("clock_fmt", s)) "Formato enviado a SystemUI" else "Guardado local; conecta LSPosed para aplicarlo")
+        c2.addView(f, m.lp(m.MP, m.WC, 0, 0, 0, 8))
+        c2.addView(pv, m.lp(m.MP, m.WC, 0, 0, 0, 10))
+        c2.addView(m.switchRow("Usar formato propio", "", hubPrefs.getBoolean("clock_on", false)) { v ->
+            saveClock(f.text.toString(), v)
         })
+        c2.addView(m.filled("Guardar y aplicar") { saveClock(f.text.toString(), true) }, m.lp(m.WC, m.WC, 0, 10, 0, 0))
         add(p, c2)
 
         val c3 = m.card()
         c3.addView(m.tv("Cómo activarlo", 18f, m.onSurface, true))
-        c3.addView(m.tv("1. Abre LSPosed → Módulos → RomTweaker → activar.\n2. Marca «Interfaz del sistema» en el ámbito.\n3. Reinicia SystemUI o el teléfono.\n\nIconify tiene muchas más funciones Xposed (relojes de pantalla de bloqueo, imagen de cabecera, estilos de batería, cuadrícula de QS…). Dependen de clases internas de SystemUI que cambian en cada Android; las iremos añadiendo una a una cuando confirmemos que funcionan en tu ROM.", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 0))
+        c3.addView(m.tv("1. LSPosed → Módulos → RomTweaker → activar.\n2. Marca «Interfaz del sistema» en el ámbito.\n3. Reinicia SystemUI.\n\nEl reloj de bloqueo y la cabecera de tu ROM usan un sistema distinto al que Iconify enganchaba; los marcados «en preparación» se activarán cuando estén probados en tu versión.", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 0))
         add(p, c3)
         return p
     }
