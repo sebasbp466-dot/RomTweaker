@@ -23,7 +23,7 @@ class ModuleMain : XposedModule() {
         if (!param.isFirstPackage) return
         val prefs: SharedPreferences? = try { getRemotePreferences("rt") } catch (e: Throwable) { null }
         hookClock(param.classLoader, prefs)
-        hookLock(prefs)
+        hookLock2(param.classLoader, prefs)
     }
 
     private fun formatted(prefs: SharedPreferences?, orig: Any?): Any? {
@@ -113,6 +113,67 @@ class ModuleMain : XposedModule() {
             log(Log.INFO, TAG, "reloj de bloqueo nativo enganchado")
         } catch (e: Throwable) {
             log(Log.WARN, TAG, "no pude enganchar el reloj de bloqueo: ${e.message}")
+        }
+    }
+
+    private fun chainOf(c: Class<*>?): String {
+        val sb = StringBuilder()
+        var x = c
+        while (x != null) { sb.append(x.name).append(" > "); x = x.superclass }
+        return sb.toString()
+    }
+
+    /** Reloj nativo del bloqueo: envuelve su dibujo y tiñe lo dibujado con degradado (sirve sea cual sea su implementación). */
+    private fun hookLock2(cl: ClassLoader, prefs: SharedPreferences?) {
+        try {
+            val base = "com.android.systemui.shared.clocks.view.FlexClock"
+            val grp = try { Class.forName(base + "ViewGroup", false, cl) } catch (e: Throwable) { null }
+            val txt = try { Class.forName(base + "TextView", false, cl) } catch (e: Throwable) { null }
+            log(Log.INFO, TAG, "FlexClockViewGroup: " + chainOf(grp))
+            log(Log.INFO, TAG, "FlexClockTextView: " + chainOf(txt))
+            val target: Class<*> = grp ?: txt ?: run { log(Log.WARN, TAG, "no hay clases FlexClock en esta ROM"); return }
+            val name = if (grp != null) "dispatchDraw" else "onDraw"
+            var c: Class<*>? = target
+            var m: java.lang.reflect.Method? = null
+            while (c != null && m == null) {
+                m = try { c.getDeclaredMethod(name, android.graphics.Canvas::class.java) } catch (e: Throwable) { null }
+                c = c.superclass
+            }
+            val mm = m ?: run { log(Log.WARN, TAG, "no encontré $name en la jerarquía"); return }
+            val seen = HashSet<String>()
+            hook(mm).intercept { chain ->
+                val v = chain.thisObject as? android.view.View
+                val cv = chain.args[0] as? android.graphics.Canvas
+                if (v == null || cv == null || !v.javaClass.name.startsWith(base) ||
+                    !(prefs?.getBoolean("lk_on", true) ?: true)) {
+                    chain.proceed()
+                } else {
+                    if (seen.add(v.javaClass.name)) log(Log.INFO, TAG, "dibuja ${v.javaClass.name} ${v.width}x${v.height}")
+                    val w = v.width.toFloat()
+                    val h = Math.max(1f, v.height.toFloat())
+                    val sc = cv.saveLayer(0f, 0f, w, h, null)
+                    val r = chain.proceed()
+                    try {
+                        val st = prefs?.getString("lk_style", "glass") ?: "glass"
+                        val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
+                        val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
+                        val k = ((prefs?.getString("lk_glass", "80") ?: "80").toIntOrNull() ?: 80) / 100f
+                        val pt = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                        pt.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+                        if (st.startsWith("glass")) {
+                            pt.shader = android.graphics.LinearGradient(0f, 0f, 0f, h, argb(col, 0.95f), argb(col, 0.30f + 0.5f * (1f - k)), android.graphics.Shader.TileMode.CLAMP)
+                        } else {
+                            pt.shader = android.graphics.LinearGradient(0f, 0f, 0f, h, col, acc, android.graphics.Shader.TileMode.CLAMP)
+                        }
+                        cv.drawRect(0f, 0f, w, h, pt)
+                    } catch (e: Throwable) { }
+                    cv.restoreToCount(sc)
+                    r
+                }
+            }
+            log(Log.INFO, TAG, "reloj de bloqueo (v2) enganchado en ${mm.declaringClass.name}.$name")
+        } catch (e: Throwable) {
+            log(Log.WARN, TAG, "hookLock2 falló: ${e.message}")
         }
     }
 }
