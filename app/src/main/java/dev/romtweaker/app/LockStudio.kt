@@ -115,7 +115,7 @@ object LockStudio {
         p.addView(box, bl)
 
         fun live() { place(); face.requestLayout(); face.invalidate() }
-        fun commit() { cfg.save(act); refresh() }
+        fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", false)) LockXp.apply(cfg, true); refresh() }
 
         // ---- estilos ----
         val cs = m.card()
@@ -149,9 +149,9 @@ object LockStudio {
         // ---- ajustes ----
         val ca = m.card()
         ca.addView(m.tv("Ajustes", 18f, m.onSurface, true))
-        ca.addView(slider(act, m, "Grosor", 100, 900, cfg.weight, { cfg.weight = it; live() }, { cfg.save(act); refresh() }))
-        ca.addView(slider(act, m, "Tamaño", 56, 150, cfg.size, { cfg.size = it; live() }, { cfg.save(act); refresh() }))
-        ca.addView(slider(act, m, "Transparencia de cristal", 0, 100, cfg.glass, { cfg.glass = it; live() }, { cfg.save(act); refresh() }))
+        ca.addView(slider(act, m, "Grosor", 100, 900, cfg.weight, { cfg.weight = it; live() }, { commit() }))
+        ca.addView(slider(act, m, "Tamaño", 56, 150, cfg.size, { cfg.size = it; live() }, { commit() }))
+        ca.addView(slider(act, m, "Transparencia de cristal", 0, 100, cfg.glass, { cfg.glass = it; live() }, { commit() }))
         ca.addView(m.tv("Color del reloj", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
         val f1 = RtFlow(act, m.dp(8))
         val pal1 = ArrayList<Int>(palette); pal1.add(m.primary)
@@ -171,9 +171,25 @@ object LockStudio {
         ca.addView(m.switchRow("Mostrar segundos", "", cfg.seconds) { v -> cfg.seconds = v; commit() }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
         p.addView(ca, m.lp(m.MP, m.WC, 0, 0, 0, 12))
 
+        // ---- reloj nativo (Xposed) ----
+        val cr = m.card()
+        cr.addView(m.tv("Aplicar al reloj real del sistema", 18f, m.onSurface, true))
+        cr.addView(m.tv("Modifica el reloj nativo de tu pantalla de bloqueo con el módulo LSPosed (sin pantalla simulada). Requiere activar RomTweaker en LSPosed con ámbito «Interfaz del sistema».", 13f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 8))
+        cr.addView(m.switchRow("Aplicar a la pantalla de bloqueo real", "", lp.getBoolean("lk_native", false)) { v ->
+            lp.edit().putBoolean("lk_native", v).apply()
+            val ok = LockXp.apply(cfg, v)
+            say(if (ok) (if (v) "Aplicado. Pulsa «Reiniciar SystemUI»" else "Desactivado") else "El módulo no está activo en LSPosed")
+        })
+        cr.addView(m.tonal("Reiniciar SystemUI") {
+            LockXp.apply(cfg, lp.getBoolean("lk_native", false))
+            say("Reiniciando SystemUI…")
+            Thread { Sx.su("killall com.android.systemui") }.start()
+        }, m.lp(m.WC, m.WC, 0, 10, 0, 0))
+        p.addView(cr, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+
         // ---- pantalla de bloqueo propia ----
         val cl = m.card()
-        cl.addView(m.tv("Usar como pantalla de bloqueo", 18f, m.onSurface, true))
+        cl.addView(m.tv("Pantalla de bloqueo propia (experimental)", 18f, m.onSurface, true))
         cl.addView(m.tv("Se muestra encima de la pantalla de bloqueo del sistema al encender la pantalla. Desliza hacia arriba para desbloquear: el sistema pedirá tu PIN, huella o patrón como siempre.", 13f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 8))
         cl.addView(m.switchRow("Activar mi pantalla de bloqueo", "", lp.getBoolean("lock_on", false)) { v ->
             lp.edit().putBoolean("lock_on", v).apply()
