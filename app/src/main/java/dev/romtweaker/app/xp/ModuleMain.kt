@@ -141,34 +141,55 @@ class ModuleMain : XposedModule() {
             }
             val mm = m ?: run { log(Log.WARN, TAG, "no encontré $name en la jerarquía"); return }
             val seen = HashSet<String>()
+            val agsl = """
+                uniform shader inp;
+                uniform float h;
+                uniform half4 c1;
+                uniform half4 c2;
+                half4 main(float2 p) {
+                    half4 s = inp.eval(p);
+                    float t = clamp(p.y / h, 0.0, 1.0);
+                    half4 c = mix(c1, c2, half(t));
+                    float a = s.a * c.a;
+                    return half4(c.rgb * a, a);
+                }
+            """
+            val applied = java.util.WeakHashMap<android.view.View, String>()
             hook(mm).intercept { chain ->
                 val v = chain.thisObject as? android.view.View
-                val cv = chain.args[0] as? android.graphics.Canvas
-                if (v == null || cv == null || !v.javaClass.name.startsWith(base) ||
-                    !(prefs?.getBoolean("lk_on", true) ?: true)) {
+                if (v == null || !v.javaClass.name.startsWith(base)) {
+                    chain.proceed()
+                } else if (!(prefs?.getBoolean("lk_on", true) ?: true)) {
+                    if (applied.remove(v) != null) v.post { try { v.setRenderEffect(null) } catch (e: Throwable) { } }
                     chain.proceed()
                 } else {
                     if (seen.add(v.javaClass.name)) log(Log.INFO, TAG, "dibuja ${v.javaClass.name} ${v.width}x${v.height}")
-                    val w = v.width.toFloat()
-                    val h = Math.max(1f, v.height.toFloat())
-                    val sc = cv.saveLayer(0f, 0f, w, h, null)
-                    val r = chain.proceed()
-                    try {
-                        val st = prefs?.getString("lk_style", "glass") ?: "glass"
-                        val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
-                        val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
-                        val k = ((prefs?.getString("lk_glass", "80") ?: "80").toIntOrNull() ?: 80) / 100f
-                        val pt = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-                        pt.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
-                        if (st.startsWith("glass")) {
-                            pt.shader = android.graphics.LinearGradient(0f, 0f, 0f, h, argb(col, 0.95f), argb(col, 0.30f + 0.5f * (1f - k)), android.graphics.Shader.TileMode.CLAMP)
-                        } else {
-                            pt.shader = android.graphics.LinearGradient(0f, 0f, 0f, h, col, acc, android.graphics.Shader.TileMode.CLAMP)
+                    val st = prefs?.getString("lk_style", "glass") ?: "glass"
+                    val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
+                    val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
+                    val k = ((prefs?.getString("lk_glass", "80") ?: "80").toIntOrNull() ?: 80) / 100f
+                    val key = "$st|$col|$acc|$k|${v.height}"
+                    if (applied[v] != key) {
+                        applied[v] = key
+                        val hh = Math.max(1f, v.height.toFloat())
+                        v.post {
+                            try {
+                                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                    val rs = android.graphics.RuntimeShader(agsl)
+                                    val glass = st.startsWith("glass")
+                                    val c2 = if (glass) col else acc
+                                    val a1 = if (glass) 0.95f else 1f
+                                    val a2 = if (glass) 0.30f + 0.5f * (1f - k) else 1f
+                                    rs.setFloatUniform("h", hh)
+                                    rs.setFloatUniform("c1", android.graphics.Color.red(col) / 255f, android.graphics.Color.green(col) / 255f, android.graphics.Color.blue(col) / 255f, a1)
+                                    rs.setFloatUniform("c2", android.graphics.Color.red(c2) / 255f, android.graphics.Color.green(c2) / 255f, android.graphics.Color.blue(c2) / 255f, a2)
+                                    v.setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(rs, "inp"))
+                                    log(Log.INFO, TAG, "efecto aplicado: $st h=$hh")
+                                }
+                            } catch (e: Throwable) { log(Log.WARN, TAG, "renderEffect: $e") }
                         }
-                        cv.drawRect(0f, 0f, w, h, pt)
-                    } catch (e: Throwable) { }
-                    cv.restoreToCount(sc)
-                    r
+                    }
+                    chain.proceed()
                 }
             }
             log(Log.INFO, TAG, "reloj de bloqueo (v2) enganchado en ${mm.declaringClass.name}.$name")
