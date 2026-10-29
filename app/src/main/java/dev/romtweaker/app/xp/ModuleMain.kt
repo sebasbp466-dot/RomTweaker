@@ -71,23 +71,25 @@ class ModuleMain : XposedModule() {
     /** Reloj nativo de la pantalla de bloqueo (FlexClock*): le aplica degradado/cristal/contorno al dibujar. */
     private fun hookLock(prefs: SharedPreferences?) {
         try {
+            val seen = HashSet<String>()
             val m = TextView::class.java.getDeclaredMethod("onDraw", android.graphics.Canvas::class.java)
             hook(m).intercept { chain ->
                 val tv = chain.thisObject as? TextView
-                if (tv == null || prefs == null ||
+                if (tv == null ||
                     !tv.javaClass.name.startsWith("com.android.systemui.shared.clocks.view.FlexClock") ||
-                    !prefs.getBoolean("lk_on", false)) {
+                    !(prefs?.getBoolean("lk_on", true) ?: true)) {
                     chain.proceed()
                 } else {
+                    if (seen.add(tv.javaClass.name)) log(Log.INFO, TAG, "dibuja ${tv.javaClass.name} h=${tv.height} prefs=${prefs != null}")
                     val p = tv.paint
                     val os = p.shader
                     val ost = p.style
                     val osw = p.strokeWidth
                     try {
-                        val st = prefs.getString("lk_style", "glass") ?: "glass"
-                        val col = (prefs.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
-                        val acc = (prefs.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
-                        val k = ((prefs.getString("lk_glass", "80") ?: "80").toIntOrNull() ?: 80) / 100f
+                        val st = prefs?.getString("lk_style", "glass") ?: "glass"
+                        val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
+                        val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
+                        val k = ((prefs?.getString("lk_glass", "80") ?: "80").toIntOrNull() ?: 80) / 100f
                         val h = Math.max(1f, tv.height.toFloat())
                         if (st.startsWith("glass")) {
                             p.shader = android.graphics.LinearGradient(0f, 0f, 0f, h, argb(col, 0.95f), argb(col, 0.30f + 0.5f * (1f - k)), android.graphics.Shader.TileMode.CLAMP)
