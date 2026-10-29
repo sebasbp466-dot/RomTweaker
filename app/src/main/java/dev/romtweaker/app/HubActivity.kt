@@ -128,8 +128,8 @@ class HubActivity : Activity() {
 
     private fun renderNav() {
         nav.removeAllViews()
-        val names = listOf("Inicio", "Iconify", "Xposed", "Más")
-        val icons = listOf("⌂", "✦", "⚡", "☰")
+        val names = listOf("Inicio", "Iconify", "Xposed", "Bloqueo", "Más")
+        val icons = listOf("⌂", "✦", "⚡", "◐", "☰")
         for (i in names.indices) {
             val it2 = m.navItem(icons[i], names[i], i == tab) { show(i) }
             nav.addView(it2, LinearLayout.LayoutParams(0, m.WC, 1f))
@@ -143,6 +143,7 @@ class HubActivity : Activity() {
             0 -> pageHome()
             1 -> pageIconify()
             2 -> pageXposed()
+            3 -> LockStudio.page(this, m, { msg -> say(msg) }, { refresh() })
             else -> pageMore()
         }
         scroll.addView(v)
