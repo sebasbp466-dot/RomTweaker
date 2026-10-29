@@ -33,14 +33,7 @@ class LockActivity : Activity() {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.setDecorFitsSystemWindows(false)
-            val ic = window.insetsController
-            if (ic != null) {
-                ic.hide(WindowInsets.Type.systemBars())
-                ic.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        }
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
         val cfg = ClockCfg.load(this)
         val root = FrameLayout(this)
         val dim = View(this)
@@ -90,6 +83,16 @@ class LockActivity : Activity() {
         })
         root.setOnTouchListener { _, ev -> gd.onTouchEvent(ev) }
         setContentView(root)
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                window.setDecorFitsSystemWindows(false)
+                val ic = window.decorView.windowInsetsController
+                if (ic != null) {
+                    ic.hide(WindowInsets.Type.systemBars())
+                    ic.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            }
+        } catch (e: Throwable) { }
 
         userPresent = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) { finish() }
