@@ -117,6 +117,22 @@ object LockStudio {
         fun live() { place(); face.requestLayout(); face.invalidate() }
         fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", false)) LockXp.apply(cfg, true); refresh() }
 
+        // ---- presets ----
+        val cp = m.card()
+        cp.addView(m.tv("Presets", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 10))
+        val fp = RtFlow(act, m.dp(8))
+        fun preset(name: String, st: String, col: Int, acc: Int, g: Int, fi: Int, w: Int) {
+            fp.addView(m.chip(name, false) { cfg.style = st; cfg.color = col; cfg.accent = acc; cfg.glass = g; cfg.filter = fi; cfg.weight = w; commit() })
+        }
+        preset("Cristal", "glass", 0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 85, 0, 600)
+        preset("Sólido", "hy_digital", 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 80, 0, 700)
+        preset("Rombo", "hy_stack", 0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 80, 1, 800)
+        preset("Revista", "hy_outline", 0xFFFFFFFF.toInt(), 0xFFFFD60A.toInt(), 80, 0, 800)
+        preset("Neón", "hy_dual", 0xFF4ADE80.toInt(), 0xFFB388FF.toInt(), 80, 3, 600)
+        preset("Rubor", "glass_stack", 0xFFFF5C9E.toInt(), 0xFFFFD60A.toInt(), 70, 2, 500)
+        cp.addView(fp, m.lp(m.MP, m.WC))
+        p.addView(cp, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+
         // ---- estilos ----
         val cs = m.card()
         cs.addView(m.tv("Estilo del reloj", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 10))
@@ -166,6 +182,11 @@ object LockStudio {
         val posNames = listOf("Arriba", "Centro", "Abajo")
         for (i in posNames.indices) { val pi = i; f3.addView(m.chip(posNames[i], cfg.pos == pi) { cfg.pos = pi; commit() }) }
         ca.addView(f3, m.lp(m.MP, m.WC))
+        ca.addView(m.tv("Filtro del cristal (se ve en el reloj real)", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
+        val f4 = RtFlow(act, m.dp(8))
+        val fnames = listOf("Ninguno", "Acanalado", "Estriado", "Ondas")
+        for (i in fnames.indices) { val fi = i; f4.addView(m.chip(fnames[i], cfg.filter == fi) { cfg.filter = fi; commit() }) }
+        ca.addView(f4, m.lp(m.MP, m.WC))
         ca.addView(m.switchRow("Mostrar fecha", "", cfg.date) { v -> cfg.date = v; commit() }, m.lp(m.MP, m.WC, 0, 12, 0, 0))
         ca.addView(m.switchRow("Formato 24 horas", "", cfg.h24) { v -> cfg.h24 = v; commit() }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
         ca.addView(m.switchRow("Mostrar segundos", "", cfg.seconds) { v -> cfg.seconds = v; commit() }, m.lp(m.MP, m.WC, 0, 8, 0, 0))

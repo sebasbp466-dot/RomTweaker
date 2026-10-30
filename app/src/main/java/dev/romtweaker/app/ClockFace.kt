@@ -26,11 +26,12 @@ class ClockCfg {
     var seconds = false
     var pos = 1
     var glass = 80
+    var filter = 0
 
     fun copy(): ClockCfg {
         val c = ClockCfg()
         c.style = style; c.weight = weight; c.size = size; c.color = color; c.accent = accent
-        c.date = date; c.h24 = h24; c.seconds = seconds; c.pos = pos; c.glass = glass
+        c.date = date; c.h24 = h24; c.seconds = seconds; c.pos = pos; c.glass = glass; c.filter = filter
         return c
     }
 
@@ -38,7 +39,7 @@ class ClockCfg {
         ctx.getSharedPreferences("lock", Context.MODE_PRIVATE).edit()
             .putString("style", style).putInt("weight", weight).putInt("size", size)
             .putInt("color", color).putInt("accent", accent).putBoolean("date", date)
-            .putBoolean("h24", h24).putBoolean("seconds", seconds).putInt("pos", pos).putInt("glass", glass)
+            .putBoolean("h24", h24).putBoolean("seconds", seconds).putInt("pos", pos).putInt("glass", glass).putInt("filter", filter)
             .apply()
     }
 
@@ -56,6 +57,7 @@ class ClockCfg {
             c.seconds = p.getBoolean("seconds", false)
             c.pos = p.getInt("pos", 1)
             c.glass = p.getInt("glass", 80)
+            c.filter = p.getInt("filter", 0)
             return c
         }
     }

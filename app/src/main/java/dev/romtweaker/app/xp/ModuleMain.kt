@@ -146,11 +146,16 @@ class ModuleMain : XposedModule() {
                 uniform float h;
                 uniform half4 c1;
                 uniform half4 c2;
+                uniform float mode;
                 half4 main(float2 p) {
-                    half4 s = inp.eval(p);
+                    float2 q = p;
+                    if (mode > 2.5) { q.x += sin(p.y * 0.03) * 7.0; }
+                    half4 s = inp.eval(q);
                     float t = clamp(p.y / h, 0.0, 1.0);
                     half4 c = mix(c1, c2, half(t));
                     float a = s.a * c.a;
+                    if (mode > 0.5 && mode < 1.5) { a *= 0.62 + 0.38 * abs(sin(p.x * 0.45)); }
+                    if (mode > 1.5 && mode < 2.5) { a *= 0.5 + 0.5 * fract(p.x / 16.0); }
                     return half4(c.rgb * a, a);
                 }
             """
@@ -168,7 +173,9 @@ class ModuleMain : XposedModule() {
                     val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
                     val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
                     val k = ((prefs?.getString("lk_glass", "80") ?: "80").toIntOrNull() ?: 80) / 100f
-                    val key = "$st|$col|$acc|$k|${v.height}"
+                    val fl = (prefs?.getString("lk_filter", "0") ?: "0").toIntOrNull() ?: 0
+                    val wt = (prefs?.getString("lk_weight", "0") ?: "0").toIntOrNull() ?: 0
+                    val key = "$st|$col|$acc|$k|$fl|$wt|${v.height}"
                     if (applied[v] != key) {
                         applied[v] = key
                         val hh = Math.max(1f, v.height.toFloat())
@@ -181,9 +188,11 @@ class ModuleMain : XposedModule() {
                                     val a1 = if (glass) 0.95f else 1f
                                     val a2 = if (glass) 0.30f + 0.5f * (1f - k) else 1f
                                     rs.setFloatUniform("h", hh)
+                                    rs.setFloatUniform("mode", fl.toFloat())
                                     rs.setFloatUniform("c1", android.graphics.Color.red(col) / 255f, android.graphics.Color.green(col) / 255f, android.graphics.Color.blue(col) / 255f, a1)
                                     rs.setFloatUniform("c2", android.graphics.Color.red(c2) / 255f, android.graphics.Color.green(c2) / 255f, android.graphics.Color.blue(c2) / 255f, a2)
                                     v.setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(rs, "inp"))
+                                    if (wt > 0) applyWeight(v, wt)
                                     log(Log.INFO, TAG, "efecto aplicado: $st h=$hh")
                                 }
                             } catch (e: Throwable) { log(Log.WARN, TAG, "renderEffect: $e") }
@@ -195,6 +204,14 @@ class ModuleMain : XposedModule() {
             log(Log.INFO, TAG, "reloj de bloqueo (v2) enganchado en ${mm.declaringClass.name}.$name")
         } catch (e: Throwable) {
             log(Log.WARN, TAG, "hookLock2 falló: ${e.message}")
+        }
+    }
+
+    private fun applyWeight(v: android.view.View, w: Int) {
+        if (v is android.view.ViewGroup) {
+            for (i in 0 until v.childCount) applyWeight(v.getChildAt(i), w)
+        } else if (v is TextView) {
+            try { v.setFontVariationSettings("'wght' " + w) } catch (e: Throwable) { }
         }
     }
 }

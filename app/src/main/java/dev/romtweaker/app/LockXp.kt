@@ -14,6 +14,8 @@ object LockXp {
         ok = call("putString", "lk_color", cfg.color.toString()) && ok
         ok = call("putString", "lk_accent", cfg.accent.toString()) && ok
         ok = call("putString", "lk_glass", cfg.glass.toString()) && ok
+        ok = call("putString", "lk_filter", cfg.filter.toString()) && ok
+        ok = call("putString", "lk_weight", cfg.weight.toString()) && ok
         ok = call("putBool", "lk_on", on) && ok
         return ok
     }
