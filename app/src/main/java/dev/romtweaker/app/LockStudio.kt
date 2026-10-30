@@ -2,11 +2,11 @@ package dev.romtweaker.app
 
 import android.app.Activity
 import android.app.WallpaperManager
-import android.content.Intent
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -17,7 +17,7 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 
-/** Estudio de personalización de la pantalla de bloqueo (relojes estilo Apple Liquid Glass y HyperOS). */
+/** Editor de la pantalla de bloqueo real: vista previa fiel + ajustes que se aplican al reloj del sistema. */
 object LockStudio {
     private val palette = listOf(
         0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 0xFF4DA3FF.toInt(), 0xFFFF5C9E.toInt(),
@@ -63,18 +63,21 @@ object LockStudio {
 
     fun page(act: Activity, m: M3, say: (String) -> Unit, refresh: () -> Unit): View {
         val cfg = ClockCfg.load(act)
+        if (cfg.style != "glass" && cfg.style != "color" && cfg.style != "solid") {
+            cfg.style = if (cfg.style.startsWith("glass")) "glass" else "color"
+        }
         val lp = act.getSharedPreferences("lock", Activity.MODE_PRIVATE)
+        val compact = lp.getBoolean("pv_compact", false)
         val p = LinearLayout(act)
         p.orientation = LinearLayout.VERTICAL
         p.setPadding(m.dp(16), m.dp(36), m.dp(16), m.dp(24))
         p.addView(m.tv("Pantalla de bloqueo", 34f, m.onSurface), m.lp(m.MP, m.WC, 8, 0, 8, 2))
-        p.addView(m.tv("Relojes Liquid Glass y HyperOS con vista previa en vivo", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 14))
+        p.addView(m.tv("Vista previa fiel: misma fuente y mismos efectos que el reloj real", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 14))
 
         // ---- vista previa ----
         val dm = act.resources.displayMetrics
         val pw = (dm.widthPixels * 0.62f).toInt()
-        val ph = (pw * 2.05f).toInt()
-        val scale = pw.toFloat() / dm.widthPixels.toFloat()
+        val ph = (pw * 2.16f).toInt()
         val box = FrameLayout(act)
         val wd = wallpaper(act)
         if (wd != null) {
@@ -83,156 +86,118 @@ object LockStudio {
             iv.setImageDrawable(wd)
             box.addView(iv, FrameLayout.LayoutParams(-1, -1))
         } else {
-            val g = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF3B1E6B.toInt(), 0xFFB5476B.toInt(), 0xFFFF9A5A.toInt()))
-            box.background = g
+            box.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF0F3B3B.toInt(), 0xFF1B6E6E.toInt(), 0xFF15262B.toInt()))
         }
         val dim = View(act)
-        dim.setBackgroundColor(0x33000000)
+        dim.setBackgroundColor(0x22000000)
         box.addView(dim, FrameLayout.LayoutParams(-1, -1))
-        val face = ClockFace(act)
+        val face = FlexPreview(act)
         face.cfg = cfg
-        face.scale = scale
-        val fl = FrameLayout.LayoutParams(-1, -2)
-        fun place() {
-            fl.gravity = if (cfg.pos == 0) Gravity.TOP else if (cfg.pos == 2) Gravity.BOTTOM else Gravity.CENTER_VERTICAL
-            fl.topMargin = if (cfg.pos == 0) (ph * 0.10f).toInt() else 0
-            fl.bottomMargin = if (cfg.pos == 2) (ph * 0.16f).toInt() else 0
-            face.layoutParams = fl
-        }
-        place()
-        box.addView(face)
-        val hint = m.tv("Desliza para desbloquear", 9f, Color.WHITE)
-        hint.alpha = 0.8f
-        val hl = FrameLayout.LayoutParams(-2, -2)
-        hl.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        hl.bottomMargin = m.dp(14)
-        box.addView(hint, hl)
+        face.compact = compact
+        box.addView(face, FrameLayout.LayoutParams(-1, -1))
+        val date = TextView(act)
+        date.setTextColor(Color.WHITE)
+        date.setTextSize(TypedValue.COMPLEX_UNIT_PX, ph * 0.0187f)
+        date.text = android.text.format.DateFormat.format("EEE, d MMM", java.util.Calendar.getInstance()).toString()
+        val dl = FrameLayout.LayoutParams(-2, -2)
+        dl.leftMargin = (pw * 0.083f).toInt()
+        dl.topMargin = (ph * (if (compact) 0.205f else 0.072f)).toInt()
+        box.addView(date, dl)
         box.clipToOutline = true
         box.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(v: View, o: Outline) { o.setRoundRect(0, 0, v.width, v.height, m.dp(28).toFloat()) }
         }
         val bl = LinearLayout.LayoutParams(pw, ph)
         bl.gravity = Gravity.CENTER_HORIZONTAL
-        bl.bottomMargin = m.dp(16)
+        bl.bottomMargin = m.dp(10)
         p.addView(box, bl)
 
-        fun live() { place(); face.requestLayout(); face.invalidate() }
-        fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", false)) LockXp.apply(cfg, true); refresh() }
+        fun live() { face.cfg = cfg; face.refreshFx() }
+        fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", true)) LockXp.apply(cfg, true); refresh() }
+
+        val fm = RtFlow(act, m.dp(8))
+        fm.addView(m.chip("Pantalla completa", !compact) { lp.edit().putBoolean("pv_compact", false).apply(); refresh() })
+        fm.addView(m.chip("Con notificaciones", compact) { lp.edit().putBoolean("pv_compact", true).apply(); refresh() })
+        p.addView(fm, m.lp(m.MP, m.WC, 4, 0, 4, 6))
+        p.addView(m.tv("Fuente de la vista previa: " + face.fontName, 11f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 12))
 
         // ---- presets ----
         val cp = m.card()
         cp.addView(m.tv("Presets", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 10))
         val fp = RtFlow(act, m.dp(8))
-        fun preset(name: String, st: String, col: Int, acc: Int, g: Int, fi: Int, w: Int) {
-            fp.addView(m.chip(name, false) { cfg.style = st; cfg.color = col; cfg.accent = acc; cfg.glass = g; cfg.filter = fi; cfg.weight = w; commit() })
+        fun preset(name: String, st: String, col: Int, acc: Int, g: Int, fi: Int, w: Int, wd2: Int, ro: Int, sl: Int) {
+            fp.addView(m.chip(name, false) {
+                cfg.style = st; cfg.color = col; cfg.accent = acc; cfg.glass = g; cfg.filter = fi
+                cfg.weight = w; cfg.wdth = wd2; cfg.rond = ro; cfg.slnt = sl
+                commit()
+            })
         }
-        preset("Cristal", "glass", 0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 85, 0, 600)
-        preset("Sólido", "hy_digital", 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 80, 0, 700)
-        preset("Rombo", "hy_stack", 0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 80, 1, 800)
-        preset("Revista", "hy_outline", 0xFFFFFFFF.toInt(), 0xFFFFD60A.toInt(), 80, 0, 800)
-        preset("Neón", "hy_dual", 0xFF4ADE80.toInt(), 0xFFB388FF.toInt(), 80, 3, 600)
-        preset("Rubor", "glass_stack", 0xFFFF5C9E.toInt(), 0xFFFFD60A.toInt(), 70, 2, 500)
+        preset("Original", "solid", 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 80, 0, 400, 85, 0, 0)
+        preset("Cristal", "glass", 0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 85, 0, 500, 90, 0, 0)
+        preset("Cristal fino", "glass", 0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 90, 0, 100, 100, 0, 0)
+        preset("Rombo", "color", 0xFFFFFFFF.toInt(), 0xFFFF7A3D.toInt(), 80, 1, 800, 120, 0, 0)
+        preset("Revista", "color", 0xFFFFFFFF.toInt(), 0xFFFFD60A.toInt(), 80, 0, 900, 150, 0, 0)
+        preset("Neón", "color", 0xFF4ADE80.toInt(), 0xFFB388FF.toInt(), 80, 3, 300, 100, 100, 0)
+        preset("Rubor", "glass", 0xFFFF5C9E.toInt(), 0xFFFFD60A.toInt(), 70, 2, 500, 95, 100, -8)
         cp.addView(fp, m.lp(m.MP, m.WC))
         p.addView(cp, m.lp(m.MP, m.WC, 0, 0, 0, 12))
 
-        // ---- estilos ----
+        // ---- relleno ----
         val cs = m.card()
-        cs.addView(m.tv("Estilo del reloj", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 10))
-        val flow = RtFlow(act, m.dp(10))
-        for (st in ClockStyles.list) {
-            val id = st.first
-            val t = LinearLayout(act)
-            t.orientation = LinearLayout.VERTICAL
-            t.gravity = Gravity.CENTER_HORIZONTAL
-            t.setPadding(m.dp(8), m.dp(8), m.dp(8), m.dp(6))
-            val bg = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF2A1B4A.toInt(), 0xFF8A3E5E.toInt()))
-            bg.cornerRadius = m.dp(16).toFloat()
-            if (cfg.style == id) bg.setStroke(m.dp(3), m.primary)
-            t.background = bg
-            val mini = ClockFace(act)
-            val mc = cfg.copy()
-            mc.style = id
-            mc.date = false
-            mc.size = 90
-            mini.cfg = mc
-            mini.scale = 0.30f
-            t.addView(mini, LinearLayout.LayoutParams(m.dp(104), -2))
-            t.addView(m.tv(st.second, 11f, Color.WHITE, true), m.lp(m.WC, m.WC, 0, 2, 0, 0))
-            t.setOnClickListener { cfg.style = id; commit() }
-            flow.addView(t)
-        }
-        cs.addView(flow, m.lp(m.MP, m.WC))
-        p.addView(cs, m.lp(m.MP, m.WC, 0, 0, 0, 12))
-
-        // ---- ajustes ----
-        val ca = m.card()
-        ca.addView(m.tv("Ajustes", 18f, m.onSurface, true))
-        ca.addView(slider(act, m, "Grosor", 100, 900, cfg.weight, { cfg.weight = it; live() }, { commit() }))
-        ca.addView(slider(act, m, "Tamaño", 56, 150, cfg.size, { cfg.size = it; live() }, { commit() }))
-        ca.addView(slider(act, m, "Transparencia de cristal", 0, 100, cfg.glass, { cfg.glass = it; live() }, { commit() }))
-        ca.addView(slider(act, m, "Ancho", 50, 150, cfg.wdth, { cfg.wdth = it }, { commit() }))
-        ca.addView(slider(act, m, "Redondez", 0, 100, cfg.rond, { cfg.rond = it }, { commit() }))
-        ca.addView(slider(act, m, "Inclinación", -10, 0, cfg.slnt, { cfg.slnt = it }, { commit() }))
-        ca.addView(m.tv("Color del reloj", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
-        val f1 = RtFlow(act, m.dp(8))
-        val pal1 = ArrayList<Int>(palette); pal1.add(m.primary)
-        for (col in pal1) { val cc = col; f1.addView(swatch(act, m, cc, cfg.color == cc) { cfg.color = cc; commit() }, ViewGroup.LayoutParams(m.dp(38), m.dp(38))) }
-        ca.addView(f1, m.lp(m.MP, m.WC))
-        ca.addView(m.tv("Color de acento (HyperOS)", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
-        val f2 = RtFlow(act, m.dp(8))
-        for (col in pal1) { val cc = col; f2.addView(swatch(act, m, cc, cfg.accent == cc) { cfg.accent = cc; commit() }, ViewGroup.LayoutParams(m.dp(38), m.dp(38))) }
-        ca.addView(f2, m.lp(m.MP, m.WC))
-        ca.addView(m.tv("Posición", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
-        val f3 = RtFlow(act, m.dp(8))
-        val posNames = listOf("Arriba", "Centro", "Abajo")
-        for (i in posNames.indices) { val pi = i; f3.addView(m.chip(posNames[i], cfg.pos == pi) { cfg.pos = pi; commit() }) }
-        ca.addView(f3, m.lp(m.MP, m.WC))
-        ca.addView(m.tv("Filtro del cristal (se ve en el reloj real)", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
+        cs.addView(m.tv("Relleno", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 10))
+        val fs = RtFlow(act, m.dp(8))
+        val styles = listOf(Pair("glass", "Cristal"), Pair("color", "Degradado"), Pair("solid", "Sólido"))
+        for (st in styles) { val id = st.first; fs.addView(m.chip(st.second, cfg.style == id) { cfg.style = id; commit() }) }
+        cs.addView(fs, m.lp(m.MP, m.WC))
+        cs.addView(m.tv("Filtro", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
         val f4 = RtFlow(act, m.dp(8))
         val fnames = listOf("Ninguno", "Acanalado", "Estriado", "Ondas")
         for (i in fnames.indices) { val fi = i; f4.addView(m.chip(fnames[i], cfg.filter == fi) { cfg.filter = fi; commit() }) }
-        ca.addView(f4, m.lp(m.MP, m.WC))
-        ca.addView(m.switchRow("Mostrar fecha", "", cfg.date) { v -> cfg.date = v; commit() }, m.lp(m.MP, m.WC, 0, 12, 0, 0))
-        ca.addView(m.switchRow("Formato 24 horas", "", cfg.h24) { v -> cfg.h24 = v; commit() }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
-        ca.addView(m.switchRow("Mostrar segundos", "", cfg.seconds) { v -> cfg.seconds = v; commit() }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
+        cs.addView(f4, m.lp(m.MP, m.WC))
+        cs.addView(slider(act, m, "Transparencia de cristal", 0, 100, cfg.glass, { cfg.glass = it; live() }, { commit() }))
+        p.addView(cs, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+
+        // ---- fuente ----
+        val ca = m.card()
+        ca.addView(m.tv("Fuente del reloj", 18f, m.onSurface, true))
+        ca.addView(slider(act, m, "Grosor", 100, 900, cfg.weight, { cfg.weight = it; live() }, { commit() }))
+        ca.addView(slider(act, m, "Ancho", 50, 150, cfg.wdth, { cfg.wdth = it; live() }, { commit() }))
+        ca.addView(slider(act, m, "Redondez", 0, 100, cfg.rond, { cfg.rond = it; live() }, { commit() }))
+        ca.addView(slider(act, m, "Inclinación", -10, 0, cfg.slnt, { cfg.slnt = it; live() }, { commit() }))
         p.addView(ca, m.lp(m.MP, m.WC, 0, 0, 0, 12))
 
-        // ---- reloj nativo (Xposed) ----
+        // ---- colores ----
+        val cc = m.card()
+        cc.addView(m.tv("Colores", 18f, m.onSurface, true))
+        cc.addView(m.tv("Color del reloj", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 10, 0, 6))
+        val pal = ArrayList<Int>(palette)
+        pal.add(m.primary)
+        val f1 = RtFlow(act, m.dp(8))
+        for (col in pal) { val x = col; f1.addView(swatch(act, m, x, cfg.color == x) { cfg.color = x; commit() }, ViewGroup.LayoutParams(m.dp(38), m.dp(38))) }
+        cc.addView(f1, m.lp(m.MP, m.WC))
+        if (cfg.style == "color") {
+            cc.addView(m.tv("Color final del degradado", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 14, 0, 6))
+            val f2 = RtFlow(act, m.dp(8))
+            for (col in pal) { val x = col; f2.addView(swatch(act, m, x, cfg.accent == x) { cfg.accent = x; commit() }, ViewGroup.LayoutParams(m.dp(38), m.dp(38))) }
+            cc.addView(f2, m.lp(m.MP, m.WC))
+        }
+        p.addView(cc, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+
+        // ---- aplicar al reloj real ----
         val cr = m.card()
-        cr.addView(m.tv("Aplicar al reloj real del sistema", 18f, m.onSurface, true))
-        cr.addView(m.tv("Modifica el reloj nativo de tu pantalla de bloqueo con el módulo LSPosed (sin pantalla simulada). Requiere activar RomTweaker en LSPosed con ámbito «Interfaz del sistema».", 13f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 8))
-        cr.addView(m.switchRow("Aplicar a la pantalla de bloqueo real", "", lp.getBoolean("lk_native", false)) { v ->
+        cr.addView(m.tv("Reloj real del sistema", 18f, m.onSurface, true))
+        cr.addView(m.tv("Los cambios se envían al reloj de tu pantalla de bloqueo mediante el módulo LSPosed (ámbito Interfaz del sistema). Si algo no se actualiza, reinicia SystemUI.", 13f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 8))
+        cr.addView(m.switchRow("Aplicar a la pantalla de bloqueo", "", lp.getBoolean("lk_native", true)) { v ->
             lp.edit().putBoolean("lk_native", v).apply()
             val ok = LockXp.apply(cfg, v)
-            say(if (ok) (if (v) "Aplicado. Pulsa «Reiniciar SystemUI»" else "Desactivado") else "El módulo no está activo en LSPosed")
+            say(if (ok) (if (v) "Aplicado" else "Reloj original restaurado al reiniciar SystemUI") else "El módulo no está activo en LSPosed")
         })
         cr.addView(m.tonal("Reiniciar SystemUI") {
-            LockXp.apply(cfg, lp.getBoolean("lk_native", false))
+            LockXp.apply(cfg, lp.getBoolean("lk_native", true))
             say("Reiniciando SystemUI…")
             Thread { Sx.su("killall com.android.systemui") }.start()
         }, m.lp(m.WC, m.WC, 0, 10, 0, 0))
         p.addView(cr, m.lp(m.MP, m.WC, 0, 0, 0, 12))
-
-        // ---- pantalla de bloqueo propia ----
-        val cl = m.card()
-        cl.addView(m.tv("Pantalla de bloqueo propia (experimental)", 18f, m.onSurface, true))
-        cl.addView(m.tv("Se muestra encima de la pantalla de bloqueo del sistema al encender la pantalla. Desliza hacia arriba para desbloquear: el sistema pedirá tu PIN, huella o patrón como siempre.", 13f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 8))
-        cl.addView(m.switchRow("Activar mi pantalla de bloqueo", "", lp.getBoolean("lock_on", false)) { v ->
-            lp.edit().putBoolean("lock_on", v).apply()
-            say(if (v) "Activando…" else "Desactivado")
-            Thread {
-                if (v) {
-                    Sx.su("appops set ${act.packageName} SYSTEM_ALERT_WINDOW allow; pm grant ${act.packageName} android.permission.POST_NOTIFICATIONS; cmd deviceidle whitelist +${act.packageName}")
-                    act.runOnUiThread {
-                        try { act.startForegroundService(Intent(act, LockService::class.java)); say("Activa. Apaga y enciende la pantalla para verla") } catch (e: Throwable) { say("No pude iniciar el servicio: ${e.message}") }
-                    }
-                } else {
-                    act.runOnUiThread { act.stopService(Intent(act, LockService::class.java)) }
-                }
-            }.start()
-        })
-        cl.addView(m.tonal("Probar ahora") { act.startActivity(Intent(act, LockActivity::class.java)) }, m.lp(m.WC, m.WC, 0, 10, 0, 0))
-        p.addView(cl, m.lp(m.MP, m.WC, 0, 0, 0, 12))
         return p
     }
 }

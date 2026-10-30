@@ -201,7 +201,7 @@ class ModuleMain : XposedModule() {
                                 if (android.os.Build.VERSION.SDK_INT >= 33) {
                                     val rs = android.graphics.RuntimeShader(agsl)
                                     val glass = st.startsWith("glass")
-                                    val c2 = if (glass) col else acc
+                                    val c2 = if (glass || st == "solid") col else acc
                                     val a1 = if (glass) 0.95f else 1f
                                     val a2 = if (glass) 0.30f + 0.5f * (1f - k) else 1f
                                     rs.setFloatUniform("h", hh)
