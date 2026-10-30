@@ -24,6 +24,7 @@ class ModuleMain : XposedModule() {
         val prefs: SharedPreferences? = try { getRemotePreferences("rt") } catch (e: Throwable) { null }
         hookClock(param.classLoader, prefs)
         hookLock2(param.classLoader, prefs)
+        hookWeight(param.classLoader, prefs)
     }
 
     private fun formatted(prefs: SharedPreferences?, orig: Any?): Any? {
@@ -209,13 +210,13 @@ class ModuleMain : XposedModule() {
                                     rs.setFloatUniform("c1", android.graphics.Color.red(col) / 255f, android.graphics.Color.green(col) / 255f, android.graphics.Color.blue(col) / 255f, a1)
                                     rs.setFloatUniform("c2", android.graphics.Color.red(c2) / 255f, android.graphics.Color.green(c2) / 255f, android.graphics.Color.blue(c2) / 255f, a2)
                                     v.setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(rs, "inp"))
-                                    if (wt > 0) applyWeight(v, wt)
+                                    
                                     log(Log.INFO, TAG, "efecto aplicado: $st h=$hh")
                                 }
                             } catch (e: Throwable) { log(Log.WARN, TAG, "renderEffect: $e") }
                         }
                     }
-                    if (wt > 0) enforceWeight(v, wt)
+                    
                     chain.proceed()
                 }
             }
@@ -268,5 +269,40 @@ class ModuleMain : XposedModule() {
             }
             log(Log.INFO, TAG, "metodos: " + names.joinToString(",").take(700))
         } catch (e: Throwable) { log(Log.WARN, TAG, "diag: $e") }
+    }
+
+    private fun setWght(s: String, w: Int): String {
+        val re = Regex("'wght'\\s*[-0-9.]+")
+        return if (re.containsMatchIn(s)) re.replace(s, "'wght' " + w) else if (s.isEmpty()) "'wght' " + w else "'wght' " + w + ", " + s
+    }
+
+    /** El reloj construye su fuente variable en buildFontVariations: ahí imponemos el grosor elegido. */
+    private fun hookWeight(cl: ClassLoader, prefs: SharedPreferences?) {
+        try {
+            val base = "com.android.systemui.shared.clocks.view.FlexClock"
+            val t = Class.forName(base + "TextView", false, cl)
+            val names = setOf("buildFontVariations", "buildAnimationTargetVariation")
+            var c: Class<*>? = t
+            var n = 0
+            while (c != null && c != TextView::class.java) {
+                for (m in c.declaredMethods) {
+                    if (m.name in names) {
+                        log(Log.INFO, TAG, "firma: " + m.toGenericString())
+                        if (m.returnType == String::class.java) {
+                            hook(m).intercept { chain ->
+                                val r = chain.proceed()
+                                val wt = (prefs?.getString("lk_weight", "0") ?: "0").toIntOrNull() ?: 0
+                                val on = prefs?.getBoolean("lk_on", true) ?: true
+                                val nm = chain.thisObject?.javaClass?.name ?: ""
+                                if (on && wt > 0 && r is String && nm.startsWith(base)) setWght(r, wt) else r
+                            }
+                            n++
+                        }
+                    }
+                }
+                c = c.superclass
+            }
+            log(Log.INFO, TAG, "grosor: " + n + " metodos enganchados")
+        } catch (e: Throwable) { log(Log.WARN, TAG, "hookWeight: " + e) }
     }
 }
