@@ -27,11 +27,14 @@ class ClockCfg {
     var pos = 1
     var glass = 80
     var filter = 0
+    var wdth = 85
+    var rond = 0
+    var slnt = 0
 
     fun copy(): ClockCfg {
         val c = ClockCfg()
         c.style = style; c.weight = weight; c.size = size; c.color = color; c.accent = accent
-        c.date = date; c.h24 = h24; c.seconds = seconds; c.pos = pos; c.glass = glass; c.filter = filter
+        c.date = date; c.h24 = h24; c.seconds = seconds; c.pos = pos; c.glass = glass; c.filter = filter; c.wdth = wdth; c.rond = rond; c.slnt = slnt
         return c
     }
 
@@ -39,7 +42,7 @@ class ClockCfg {
         ctx.getSharedPreferences("lock", Context.MODE_PRIVATE).edit()
             .putString("style", style).putInt("weight", weight).putInt("size", size)
             .putInt("color", color).putInt("accent", accent).putBoolean("date", date)
-            .putBoolean("h24", h24).putBoolean("seconds", seconds).putInt("pos", pos).putInt("glass", glass).putInt("filter", filter)
+            .putBoolean("h24", h24).putBoolean("seconds", seconds).putInt("pos", pos).putInt("glass", glass).putInt("filter", filter).putInt("wdth", wdth).putInt("rond", rond).putInt("slnt", slnt)
             .apply()
     }
 
@@ -58,6 +61,9 @@ class ClockCfg {
             c.pos = p.getInt("pos", 1)
             c.glass = p.getInt("glass", 80)
             c.filter = p.getInt("filter", 0)
+            c.wdth = p.getInt("wdth", 85)
+            c.rond = p.getInt("rond", 0)
+            c.slnt = p.getInt("slnt", 0)
             return c
         }
     }

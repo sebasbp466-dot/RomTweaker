@@ -352,7 +352,17 @@ class ModuleMain : XposedModule() {
                                 if (dumped.add(m.name)) log(Log.INFO, TAG, "dump " + m.name + ": " + dumpObj(r))
                                 val wt = (prefs?.getString("lk_weight", "0") ?: "0").toIntOrNull() ?: 0
                                 val on = prefs?.getBoolean("lk_on", true) ?: true
-                                if (on && wt > 0) forceWght(r, wt, 0)
+                                if (on) {
+                                    val ax = HashMap<String, Int>()
+                                    if (wt > 0) ax["wght"] = wt
+                                    val wd = prefs?.getString("lk_wdth", null)?.toIntOrNull()
+                                    if (wd != null) ax["wdth"] = wd
+                                    val ro = prefs?.getString("lk_rond", null)?.toIntOrNull()
+                                    if (ro != null) ax["ROND"] = ro
+                                    val sl = prefs?.getString("lk_slnt", null)?.toIntOrNull()
+                                    if (sl != null) ax["slnt"] = sl
+                                    if (ax.isNotEmpty()) forceAx(r, ax, 0)
+                                }
                             }
                             r
                         }
@@ -363,5 +373,59 @@ class ModuleMain : XposedModule() {
             }
             log(Log.INFO, TAG, "grosor: " + n + " metodos enganchados")
         } catch (e: Throwable) { log(Log.WARN, TAG, "hookWeight: " + e) }
+    }
+
+    private fun setAxis(s: String, k: String, w: Int): String {
+        val re = Regex("'" + k + "'\\s*[-0-9.]+")
+        return if (re.containsMatchIn(s)) re.replace(s, "'" + k + "' " + w) else s
+    }
+
+    /** Impone varios ejes (wght, wdth, ROND, slnt) dentro del objeto devuelto. */
+    private fun forceAx(o: Any?, ax: Map<String, Int>, depth: Int): Boolean {
+        if (o == null || depth > 3) return false
+        var changed = false
+        try {
+            val fk = o.javaClass.getDeclaredField("key")
+            fk.isAccessible = true
+            val kv = fk.get(o)
+            if (kv is String && ax.containsKey(kv)) {
+                val fv = o.javaClass.getDeclaredField("value")
+                fv.isAccessible = true
+                val w = ax[kv] ?: 0
+                if (fv.type == java.lang.Double.TYPE) fv.set(o, w.toDouble()) else fv.set(o, w.toFloat())
+                changed = true
+            }
+        } catch (e: Throwable) { }
+        var c: Class<*>? = o.javaClass
+        while (c != null && c != Any::class.java) {
+            for (f in c.declaredFields) {
+                if (java.lang.reflect.Modifier.isStatic(f.modifiers)) continue
+                try {
+                    f.isAccessible = true
+                    val v = f.get(o)
+                    if (v is String && v.contains("wght")) {
+                        var ns: String = v
+                        for ((k, w) in ax) ns = setAxis(ns, k, w)
+                        if (ns != v) { f.set(o, ns); changed = true }
+                    } else if (v is MutableMap<*, *>) {
+                        @Suppress("UNCHECKED_CAST")
+                        val mm = v as MutableMap<Any?, Any?>
+                        for ((k, w) in ax) {
+                            val old = mm[k]
+                            if (old != null) {
+                                mm[k] = if (old is Double) w.toDouble() else if (old is Int) w else w.toFloat()
+                                changed = true
+                            }
+                        }
+                    } else if (v is Iterable<*>) {
+                        for (e in v) if (forceAx(e, ax, depth + 1)) changed = true
+                    } else if (v != null && v.javaClass.name.startsWith("com.android.systemui")) {
+                        if (forceAx(v, ax, depth + 1)) changed = true
+                    }
+                } catch (e: Throwable) { }
+            }
+            c = c.superclass
+        }
+        return changed
     }
 }

@@ -16,6 +16,9 @@ object LockXp {
         ok = call("putString", "lk_glass", cfg.glass.toString()) && ok
         ok = call("putString", "lk_filter", cfg.filter.toString()) && ok
         ok = call("putString", "lk_weight", cfg.weight.toString()) && ok
+        ok = call("putString", "lk_wdth", cfg.wdth.toString()) && ok
+        ok = call("putString", "lk_rond", cfg.rond.toString()) && ok
+        ok = call("putString", "lk_slnt", cfg.slnt.toString()) && ok
         ok = call("putBool", "lk_on", on) && ok
         return ok
     }
