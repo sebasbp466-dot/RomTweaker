@@ -276,7 +276,66 @@ class ModuleMain : XposedModule() {
         return if (re.containsMatchIn(s)) re.replace(s, "'wght' " + w) else if (s.isEmpty()) "'wght' " + w else "'wght' " + w + ", " + s
     }
 
-    /** El reloj construye su fuente variable en buildFontVariations: ahí imponemos el grosor elegido. */
+    private val dumped = HashSet<String>()
+
+    private fun dumpObj(o: Any?): String {
+        if (o == null) return "null"
+        val sb = StringBuilder(o.javaClass.simpleName).append("{")
+        var c: Class<*>? = o.javaClass
+        while (c != null && c != Any::class.java) {
+            for (f in c.declaredFields) {
+                if (java.lang.reflect.Modifier.isStatic(f.modifiers)) continue
+                try { f.isAccessible = true; sb.append(f.name).append("=").append(("" + f.get(o)).take(140)).append("; ") } catch (e: Throwable) { }
+            }
+            c = c.superclass
+        }
+        return sb.append("}").toString().take(900)
+    }
+
+    /** Impone wght dentro del objeto devuelto (cadenas, mapas, listas o pares clave/valor). */
+    private fun forceWght(o: Any?, w: Int, depth: Int): Boolean {
+        if (o == null || depth > 3) return false
+        var changed = false
+        try {
+            val fk = o.javaClass.getDeclaredField("key")
+            fk.isAccessible = true
+            if (fk.get(o) == "wght") {
+                val fv = o.javaClass.getDeclaredField("value")
+                fv.isAccessible = true
+                if (fv.type == java.lang.Double.TYPE) fv.set(o, w.toDouble()) else fv.set(o, w.toFloat())
+                changed = true
+            }
+        } catch (e: Throwable) { }
+        var c: Class<*>? = o.javaClass
+        while (c != null && c != Any::class.java) {
+            for (f in c.declaredFields) {
+                if (java.lang.reflect.Modifier.isStatic(f.modifiers)) continue
+                try {
+                    f.isAccessible = true
+                    val v = f.get(o)
+                    if (v is String && v.contains("wght")) {
+                        f.set(o, setWght(v, w)); changed = true
+                    } else if (v is MutableMap<*, *>) {
+                        @Suppress("UNCHECKED_CAST")
+                        val mm = v as MutableMap<Any?, Any?>
+                        val old = mm["wght"]
+                        if (old != null) {
+                            mm["wght"] = if (old is Double) w.toDouble() else if (old is Int) w else w.toFloat()
+                            changed = true
+                        }
+                    } else if (v is Iterable<*>) {
+                        for (e in v) if (forceWght(e, w, depth + 1)) changed = true
+                    } else if (v != null && v.javaClass.name.startsWith("com.android.systemui")) {
+                        if (forceWght(v, w, depth + 1)) changed = true
+                    }
+                } catch (e: Throwable) { }
+            }
+            c = c.superclass
+        }
+        return changed
+    }
+
+    /** Los métodos estáticos buildFontVariations / buildAnimationTargetVariation construyen los ejes de la fuente. */
     private fun hookWeight(cl: ClassLoader, prefs: SharedPreferences?) {
         try {
             val base = "com.android.systemui.shared.clocks.view.FlexClock"
@@ -287,17 +346,17 @@ class ModuleMain : XposedModule() {
             while (c != null && c != TextView::class.java) {
                 for (m in c.declaredMethods) {
                     if (m.name in names) {
-                        log(Log.INFO, TAG, "firma: " + m.toGenericString())
-                        if (m.returnType == String::class.java) {
-                            hook(m).intercept { chain ->
-                                val r = chain.proceed()
+                        hook(m).intercept { chain ->
+                            val r = chain.proceed()
+                            if (r != null) {
+                                if (dumped.add(m.name)) log(Log.INFO, TAG, "dump " + m.name + ": " + dumpObj(r))
                                 val wt = (prefs?.getString("lk_weight", "0") ?: "0").toIntOrNull() ?: 0
                                 val on = prefs?.getBoolean("lk_on", true) ?: true
-                                val nm = chain.thisObject?.javaClass?.name ?: ""
-                                if (on && wt > 0 && r is String && nm.startsWith(base)) setWght(r, wt) else r
+                                if (on && wt > 0) forceWght(r, wt, 0)
                             }
-                            n++
+                            r
                         }
+                        n++
                     }
                 }
                 c = c.superclass
