@@ -147,6 +147,7 @@ class ModuleMain : XposedModule() {
                 uniform half4 c1;
                 uniform half4 c2;
                 uniform float mode;
+                uniform float edge;
                 half4 main(float2 p) {
                     float2 q = p;
                     if (mode > 2.5) { q.x += sin(p.y * 0.03) * 7.0; }
@@ -156,7 +157,21 @@ class ModuleMain : XposedModule() {
                     float a = s.a * c.a;
                     if (mode > 0.5 && mode < 1.5) { a *= 0.62 + 0.38 * abs(sin(p.x * 0.45)); }
                     if (mode > 1.5 && mode < 2.5) { a *= 0.5 + 0.5 * fract(p.x / 16.0); }
-                    return half4(c.rgb * a, a);
+                    half3 rgb = c.rgb;
+                    if (edge > 0.5) {
+                        float d = 2.5;
+                        float au = inp.eval(q + float2(0.0, -d)).a;
+                        float ad = inp.eval(q + float2(0.0, d)).a;
+                        float al = inp.eval(q + float2(-d, 0.0)).a;
+                        float ar = inp.eval(q + float2(d, 0.0)).a;
+                        float rim = clamp(s.a - min(min(au, ad), min(al, ar)), 0.0, 1.0);
+                        float top = clamp(s.a - au, 0.0, 1.0);
+                        float bot = clamp(s.a - ad, 0.0, 1.0);
+                        rgb = rgb + (half3(1.0) - rgb) * half(0.85 * rim * (0.4 + 0.6 * top));
+                        rgb = rgb * half(1.0 - 0.35 * bot);
+                        a = max(a, rim * 0.8);
+                    }
+                    return half4(rgb * a, a);
                 }
             """
             val applied = java.util.WeakHashMap<android.view.View, String>()
@@ -169,6 +184,7 @@ class ModuleMain : XposedModule() {
                     chain.proceed()
                 } else {
                     if (seen.add(v.javaClass.name)) log(Log.INFO, TAG, "dibuja ${v.javaClass.name} ${v.width}x${v.height}")
+                    diag(v)
                     val st = prefs?.getString("lk_style", "glass") ?: "glass"
                     val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
                     val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
@@ -189,6 +205,7 @@ class ModuleMain : XposedModule() {
                                     val a2 = if (glass) 0.30f + 0.5f * (1f - k) else 1f
                                     rs.setFloatUniform("h", hh)
                                     rs.setFloatUniform("mode", fl.toFloat())
+                                    rs.setFloatUniform("edge", if (glass) 1f else 0f)
                                     rs.setFloatUniform("c1", android.graphics.Color.red(col) / 255f, android.graphics.Color.green(col) / 255f, android.graphics.Color.blue(col) / 255f, a1)
                                     rs.setFloatUniform("c2", android.graphics.Color.red(c2) / 255f, android.graphics.Color.green(c2) / 255f, android.graphics.Color.blue(c2) / 255f, a2)
                                     v.setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(rs, "inp"))
@@ -198,6 +215,7 @@ class ModuleMain : XposedModule() {
                             } catch (e: Throwable) { log(Log.WARN, TAG, "renderEffect: $e") }
                         }
                     }
+                    if (wt > 0) enforceWeight(v, wt)
                     chain.proceed()
                 }
             }
@@ -211,7 +229,44 @@ class ModuleMain : XposedModule() {
         if (v is android.view.ViewGroup) {
             for (i in 0 until v.childCount) applyWeight(v.getChildAt(i), w)
         } else if (v is TextView) {
-            try { v.setFontVariationSettings("'wght' " + w) } catch (e: Throwable) { }
+            try { val want = "'wght' " + w; if (v.fontVariationSettings != want) v.setFontVariationSettings(want) } catch (e: Throwable) { }
         }
+    }
+
+    private val lastW = java.util.WeakHashMap<android.view.View, Long>()
+    private var diagDone = false
+
+    private fun enforceWeight(v: android.view.View, w: Int) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val last = lastW[v] ?: 0L
+        if (now - last < 400L) return
+        lastW[v] = now
+        applyWeight(v, w)
+    }
+
+    private fun diag(v: android.view.View) {
+        if (diagDone) return
+        diagDone = true
+        try {
+            val sb = StringBuilder("diag:")
+            var first: Class<*>? = null
+            fun walk(x: android.view.View) {
+                if (x is android.view.ViewGroup) {
+                    for (i in 0 until x.childCount) walk(x.getChildAt(i))
+                } else if (x is TextView) {
+                    if (first == null) first = x.javaClass
+                    sb.append(" [").append(x.javaClass.name).append(" fvs=").append(x.fontVariationSettings).append(" t=").append(x.text).append("]")
+                }
+            }
+            walk(v)
+            log(Log.INFO, TAG, sb.toString())
+            val names = LinkedHashSet<String>()
+            var c: Class<*>? = first
+            while (c != null && c != TextView::class.java) {
+                for (m in c.declaredMethods) if (Regex("(?i)style|weight|variation|axis|font|anim").containsMatchIn(m.name)) names.add(m.name)
+                c = c.superclass
+            }
+            log(Log.INFO, TAG, "metodos: " + names.joinToString(",").take(700))
+        } catch (e: Throwable) { log(Log.WARN, TAG, "diag: $e") }
     }
 }
