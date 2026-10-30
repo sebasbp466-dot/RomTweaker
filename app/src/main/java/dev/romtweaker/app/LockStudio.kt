@@ -46,7 +46,9 @@ object LockStudio {
     }
 
     private fun swatch(act: Activity, m: M3, col: Int, sel: Boolean, click: () -> Unit): View {
-        val v = View(act)
+        val v = object : View(act) {
+            override fun onMeasure(w: Int, h: Int) { setMeasuredDimension(m.dp(38), m.dp(38)) }
+        }
         val g = GradientDrawable()
         g.shape = GradientDrawable.OVAL
         g.setColor(col)
