@@ -25,6 +25,7 @@ class ModuleMain : XposedModule() {
         hookClock(param.classLoader, prefs)
         hookLock2(param.classLoader, prefs)
         hookWeight(param.classLoader, prefs)
+        hookLockSmall(param.classLoader, prefs)
     }
 
     private fun formatted(prefs: SharedPreferences?, orig: Any?): Any? {
@@ -427,5 +428,61 @@ class ModuleMain : XposedModule() {
             c = c.superclass
         }
         return changed
+    }
+
+    private fun fxApply(v: android.view.View, prefs: SharedPreferences?, applied: java.util.WeakHashMap<android.view.View, String>) {
+        val st = prefs?.getString("lk_style", "glass") ?: "glass"
+        val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
+        val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
+        val k = ((prefs?.getString("lk_glass", "80") ?: "80").toIntOrNull() ?: 80) / 100f
+        val fl = (prefs?.getString("lk_filter", "0") ?: "0").toIntOrNull() ?: 0
+        val key = st + "|" + col + "|" + acc + "|" + k + "|" + fl + "|" + v.height
+        if (applied[v] == key) return
+        applied[v] = key
+        val hh = Math.max(1f, v.height.toFloat())
+        v.post {
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    val rs = android.graphics.RuntimeShader(dev.romtweaker.app.FlexPreview.AGSL)
+                    val glass = st.startsWith("glass")
+                    val c2 = if (glass || st == "solid") col else acc
+                    val a1 = if (glass) 0.95f else 1f
+                    val a2 = if (glass) 0.30f + 0.5f * (1f - k) else 1f
+                    rs.setFloatUniform("h", hh)
+                    rs.setFloatUniform("mode", fl.toFloat())
+                    rs.setFloatUniform("edge", if (glass) 1f else 0f)
+                    rs.setFloatUniform("c1", android.graphics.Color.red(col) / 255f, android.graphics.Color.green(col) / 255f, android.graphics.Color.blue(col) / 255f, a1)
+                    rs.setFloatUniform("c2", android.graphics.Color.red(c2) / 255f, android.graphics.Color.green(c2) / 255f, android.graphics.Color.blue(c2) / 255f, a2)
+                    v.setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(rs, "inp"))
+                    log(Log.INFO, TAG, "efecto (reloj pequeno) aplicado: " + st)
+                }
+            } catch (e: Throwable) { log(Log.WARN, TAG, "fxApply: " + e) }
+        }
+    }
+
+    /** El reloj compacto (con notificaciones) es un FlexClockTextView suelto: se engancha su propio onDraw. */
+    private fun hookLockSmall(cl: ClassLoader, prefs: SharedPreferences?) {
+        try {
+            val base = "com.android.systemui.shared.clocks.view.FlexClock"
+            val t = Class.forName(base + "TextView", false, cl)
+            var c: Class<*>? = t
+            var m: java.lang.reflect.Method? = null
+            while (c != null && c != TextView::class.java && m == null) {
+                m = try { c.getDeclaredMethod("onDraw", android.graphics.Canvas::class.java) } catch (e: Throwable) { null }
+                c = c.superclass
+            }
+            val mm = m ?: run { log(Log.WARN, TAG, "reloj pequeno: sin onDraw propio"); return }
+            val applied = java.util.WeakHashMap<android.view.View, String>()
+            hook(mm).intercept { chain ->
+                val v = chain.thisObject as? android.view.View
+                if (v != null && v.javaClass.name.startsWith(base) &&
+                    (v.parent?.javaClass?.name ?: "") != base + "ViewGroup" &&
+                    (prefs?.getBoolean("lk_on", true) ?: true)) {
+                    fxApply(v, prefs, applied)
+                }
+                chain.proceed()
+            }
+            log(Log.INFO, TAG, "reloj pequeno enganchado en " + mm.declaringClass.name)
+        } catch (e: Throwable) { log(Log.WARN, TAG, "hookLockSmall: " + e) }
     }
 }

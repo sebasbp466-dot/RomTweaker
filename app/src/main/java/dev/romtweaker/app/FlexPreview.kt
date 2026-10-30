@@ -65,6 +65,15 @@ class FlexPreview(ctx: Context) : View(ctx) {
     }
 
     private fun loadFont() {
+        for (path in listOf("/system/fonts/GoogleSansFlex-Regular.ttf", "/system_ext/fonts/GoogleSansFlex-Regular.ttf", "/product/fonts/GoogleSansFlex-Regular.ttf")) {
+            try {
+                val f = File(path)
+                if (f.exists()) {
+                    val t = Typeface.createFromFile(f)
+                    if (supports(t)) { tf = t; fontName = f.name; return }
+                }
+            } catch (e: Throwable) { }
+        }
         try {
             val ai = context.packageManager.getApplicationInfo("com.android.systemui", 0)
             val zf = java.util.zip.ZipFile(ai.sourceDir)
