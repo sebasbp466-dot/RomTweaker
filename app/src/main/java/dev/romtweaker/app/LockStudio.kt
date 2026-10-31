@@ -76,7 +76,7 @@ object LockStudio {
 
         // ---- vista previa ----
         val dm = act.resources.displayMetrics
-        val pw = (dm.widthPixels * 0.62f).toInt()
+        val pw = (dm.widthPixels * 0.5f).toInt()
         val mt = ClockMetrics.load(act, compact)?.takeIf { it.gh < it.sh * 0.75f && it.gw > it.sw * 0.15f && it.gw <= it.sw }
         val ph = (pw * (if (mt != null) mt.sh.toFloat() / mt.sw else 2.16f)).toInt()
         val box = FrameLayout(act)
@@ -130,7 +130,12 @@ object LockStudio {
         fm.addView(m.chip("Pantalla completa", !compact) { lp.edit().putBoolean("pv_compact", false).apply(); refresh() })
         fm.addView(m.chip("Con notificaciones", compact) { lp.edit().putBoolean("pv_compact", true).apply(); refresh() })
         p.addView(fm, m.lp(m.MP, m.WC, 4, 0, 4, 6))
-        p.addView(m.tv("Fuente de la vista previa: " + face.fontName, 11f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 12))
+        p.addView(m.tv("Fuente de la vista previa: " + face.fontName, 11f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 10))
+        val sec = lp.getInt("lk_sec", 0)
+        val seg = RtFlow(act, m.dp(8))
+        val segNames = listOf("Estilo", "Fuente", "Color", "Sistema")
+        for (k in segNames.indices) { val kk = k; seg.addView(m.chip(segNames[k], sec == kk) { lp.edit().putInt("lk_sec", kk).apply(); refresh() }) }
+        p.addView(seg, m.lp(m.MP, m.WC, 4, 0, 4, 12))
 
         // ---- presets ----
         val cp = m.card()
@@ -151,7 +156,7 @@ object LockStudio {
         preset("Neón", "color", 0xFF4ADE80.toInt(), 0xFFB388FF.toInt(), 80, 3, 300, 100, 100, 0)
         preset("Rubor", "glass", 0xFFFF5C9E.toInt(), 0xFFFFD60A.toInt(), 70, 2, 500, 95, 100, -8)
         cp.addView(fp, m.lp(m.MP, m.WC))
-        p.addView(cp, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        if (sec == 0) p.addView(cp, m.lp(m.MP, m.WC, 0, 0, 0, 12))
 
         // ---- relleno ----
         val cs = m.card()
@@ -166,7 +171,7 @@ object LockStudio {
         for (i in fnames.indices) { val fi = i; f4.addView(m.chip(fnames[i], cfg.filter == fi) { cfg.filter = fi; commit() }) }
         cs.addView(f4, m.lp(m.MP, m.WC))
         cs.addView(slider(act, m, "Transparencia de cristal", 0, 100, cfg.glass, { cfg.glass = it; live() }, { commit() }))
-        p.addView(cs, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        if (sec == 0) p.addView(cs, m.lp(m.MP, m.WC, 0, 0, 0, 12))
 
         // ---- fuente ----
         val ca = m.card()
@@ -175,7 +180,7 @@ object LockStudio {
         ca.addView(slider(act, m, "Ancho", 50, 150, cfg.wdth, { cfg.wdth = it; live() }, { commit() }))
         ca.addView(slider(act, m, "Redondez", 0, 100, cfg.rond, { cfg.rond = it; live() }, { commit() }))
         ca.addView(slider(act, m, "Inclinación", -10, 0, cfg.slnt, { cfg.slnt = it; live() }, { commit() }))
-        p.addView(ca, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        if (sec == 1) p.addView(ca, m.lp(m.MP, m.WC, 0, 0, 0, 12))
 
         // ---- colores ----
         val cc = m.card()
@@ -192,7 +197,7 @@ object LockStudio {
             for (col in pal) { val x = col; f2.addView(swatch(act, m, x, cfg.accent == x) { cfg.accent = x; commit() }, ViewGroup.LayoutParams(m.dp(38), m.dp(38))) }
             cc.addView(f2, m.lp(m.MP, m.WC))
         }
-        p.addView(cc, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        if (sec == 2) p.addView(cc, m.lp(m.MP, m.WC, 0, 0, 0, 12))
 
         // ---- aplicar al reloj real ----
         val cr = m.card()
@@ -215,7 +220,7 @@ object LockStudio {
             try { LockPanelService.toggle(act, v); say(if (v) "Panel activo: bloquea el teléfono para probarlo" else "Panel cerrado") } catch (e: Throwable) { say("No pude abrir el panel: " + e.message) }
         }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
         cr.addView(m.tv(ClockMetrics.status(act), 12f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 10, 0, 0))
-        p.addView(cr, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        if (sec == 3) p.addView(cr, m.lp(m.MP, m.WC, 0, 0, 0, 12))
         return p
     }
 }

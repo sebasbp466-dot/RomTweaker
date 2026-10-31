@@ -191,6 +191,18 @@ class HubActivity : Activity() {
         line(c, "LSPosed", if (Xp.included()) Xp.status() else "Módulo no incluido")
         add(p, c)
 
+        val cq = m.card()
+        cq.addView(m.tv("Acciones rápidas", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 10))
+        val fq = RtFlow(this, m.dp(8))
+        fq.addView(m.tonal("Reiniciar SystemUI") { Thread { Sx.su("killall com.android.systemui"); runOnUiThread { say("SystemUI reiniciado") } }.start() })
+        fq.addView(m.tonal("Ver bloqueo") { Thread { Sx.su("input keyevent 223; sleep 1; input keyevent 224") }.start() })
+        fq.addView(m.tonal("Abrir LSPosed") {
+            val li = packageManager.getLaunchIntentForPackage("org.lsposed.manager")
+            if (li != null) startActivity(li) else say("Abre LSPosed desde su notificación")
+        })
+        cq.addView(fq, m.lp(m.MP, m.WC))
+        add(p, cq)
+
         val c2 = m.card()
         c2.addView(m.tv("Iconify portado", 18f, m.onSurface, true))
         val groups = HashSet<String>()

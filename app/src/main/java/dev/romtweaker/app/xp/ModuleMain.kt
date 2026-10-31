@@ -69,25 +69,23 @@ class ModuleMain : XposedModule() {
     }
 
     private val mLast = HashMap<String, String>()
-    private val mTime = HashMap<String, Long>()
+    private val mPend = HashMap<String, String>()
+    private val mRun = HashMap<String, Runnable>()
     private val liveViews = java.util.WeakHashMap<android.view.View, Boolean>()
     private var liveListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
-    /** Envía a la app las medidas REALES del reloj (posición, tamaño, dígitos) y reaplica el efecto al cambiar ajustes. */
+    /** Envía a la app las medidas REALES del reloj cuando dejan de cambiar (700 ms estables) y reaplica el efecto al cambiar ajustes. */
     private fun pushMetrics(v: android.view.View, kind: String, prefs: SharedPreferences?) {
         try {
             liveViews[v] = true
             if (liveListener == null && prefs != null) {
                 val l = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-                    try { for (x in liveViews.keys.toList()) x.post { x.invalidate() } } catch (e: Throwable) { }
+                    try { for (x in liveViews.keys.toList()) x.post { x.requestLayout(); x.invalidate() } } catch (e: Throwable) { }
                 }
                 liveListener = l
                 prefs.registerOnSharedPreferenceChangeListener(l)
             }
-            val now = android.os.SystemClock.uptimeMillis()
-            if (now - (mTime[kind] ?: 0L) < 1500L) return
             if (!v.isShown || v.width <= 0 || v.alpha < 0.99f) return
-            mTime[kind] = now
             val dm = v.resources.displayMetrics
             val loc = IntArray(2)
             v.getLocationOnScreen(loc)
@@ -113,13 +111,28 @@ class ModuleMain : XposedModule() {
             j.put("gx", loc[0]); j.put("gy", loc[1]); j.put("gw", v.width); j.put("gh", v.height)
             j.put("d", arr)
             val str = j.toString()
-            if (mLast[kind] == str) return
-            mLast[kind] = str
-            val it = android.content.Intent("dev.romtweaker.app.CLOCK_METRICS").setPackage("dev.romtweaker.app")
-            it.putExtra("kind", kind)
-            it.putExtra("json", str)
-            v.context.sendBroadcast(it)
-            log(Log.INFO, TAG, "medidas enviadas ($kind): " + str.take(160))
+            if (str == mLast[kind]) {
+                mRun[kind]?.let { v.removeCallbacks(it) }
+                mRun.remove(kind); mPend.remove(kind)
+                return
+            }
+            if (str == mPend[kind]) return
+            mPend[kind] = str
+            mRun[kind]?.let { v.removeCallbacks(it) }
+            val ctx = v.context
+            val r = Runnable {
+                try {
+                    mLast[kind] = str
+                    mPend.remove(kind); mRun.remove(kind)
+                    val intent = android.content.Intent("dev.romtweaker.app.CLOCK_METRICS").setPackage("dev.romtweaker.app")
+                    intent.putExtra("kind", kind)
+                    intent.putExtra("json", str)
+                    ctx.sendBroadcast(intent)
+                    log(Log.INFO, TAG, "medidas enviadas ($kind): " + str.take(200))
+                } catch (e: Throwable) { log(Log.WARN, TAG, "metricas: $e") }
+            }
+            mRun[kind] = r
+            v.postDelayed(r, 700L)
         } catch (e: Throwable) { log(Log.WARN, TAG, "metricas: $e") }
     }
 
@@ -190,8 +203,14 @@ class ModuleMain : XposedModule() {
             log(Log.INFO, TAG, "FlexClockTextView: " + chainOf(txt))
             val target: Class<*> = grp ?: txt ?: run { log(Log.WARN, TAG, "no hay clases FlexClock en esta ROM"); return }
             val name = if (grp != null) "dispatchDraw" else "onDraw"
-            var c: Class<*>? = target
             var m: java.lang.reflect.Method? = null
+            if (grp != null) {
+                try { log(Log.INFO, TAG, "FlexClockViewGroup declara: " + grp.declaredMethods.map { it.name }.distinct().sorted().joinToString(",").take(600)) } catch (e: Throwable) { }
+                for (cand in listOf("dispatchDraw", "onLayout", "onMeasure")) {
+                    if (m == null) m = grp.declaredMethods.firstOrNull { it.name == cand }
+                }
+            }
+            var c: Class<*>? = target
             while (c != null && m == null) {
                 m = try { c.getDeclaredMethod(name, android.graphics.Canvas::class.java) } catch (e: Throwable) { null }
                 c = c.superclass
@@ -277,7 +296,7 @@ class ModuleMain : XposedModule() {
                     chain.proceed()
                 }
             }
-            log(Log.INFO, TAG, "reloj de bloqueo (v2) enganchado en ${mm.declaringClass.name}.$name")
+            log(Log.INFO, TAG, "reloj de bloqueo (v2) enganchado en ${mm.declaringClass.name}.${mm.name}")
         } catch (e: Throwable) {
             log(Log.WARN, TAG, "hookLock2 falló: ${e.message}")
         }

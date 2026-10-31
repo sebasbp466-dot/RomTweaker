@@ -119,14 +119,24 @@ class FlexPreview(ctx: Context) : View(ctx) {
         val mt = metrics
         if (mt != null) {
             val sc = scale
-            val cx = (mt.sw / 2f - mt.gx) * sc
-            if (compact) {
+            val d = mt.digits
+            val all = hh + mm
+            if (!compact && d.size == 4 && d.all { it.t.length == 1 }) {
+                for (i in 0 until 4) {
+                    p.textSize = d[i].size * sc
+                    c.drawText(all[i].toString(), (d[i].cx - mt.gx) * sc, (d[i].base - 0.436f * d[i].size - mt.gy) * sc, p)
+                }
+            } else if (compact && d.size == 1) {
+                val txt = if (d[0].t.length == 4) hh.toInt().toString() + ":" + mm else hh + ":" + mm
+                p.textSize = d[0].size * sc
+                c.drawText(txt, (d[0].cx - mt.gx) * sc, (d[0].base - 0.436f * d[0].size - mt.gy) * sc, p)
+            } else if (compact) {
                 p.textSize = mt.sh * 0.101f * sc
-                c.drawText(hh + ":" + mm, cx, (mt.sh * 0.143f - mt.gy) * sc, p)
+                c.drawText(hh + ":" + mm, (mt.sw / 2f - mt.gx) * sc, (mt.sh * 0.143f - mt.gy) * sc, p)
             } else {
                 p.textSize = mt.sh * 0.216f * sc
-                c.drawText(hh, cx, (mt.sh * 0.482f - mt.gy) * sc, p)
-                c.drawText(mm, cx, (mt.sh * 0.653f - mt.gy) * sc, p)
+                c.drawText(hh, (mt.sw / 2f - mt.gx) * sc, (mt.sh * 0.482f - mt.gy) * sc, p)
+                c.drawText(mm, (mt.sw / 2f - mt.gx) * sc, (mt.sh * 0.653f - mt.gy) * sc, p)
             }
         } else if (compact) {
             p.textSize = h * 0.101f
