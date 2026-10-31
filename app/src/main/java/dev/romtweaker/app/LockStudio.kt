@@ -77,7 +77,7 @@ object LockStudio {
         // ---- vista previa ----
         val dm = act.resources.displayMetrics
         val pw = (dm.widthPixels * 0.62f).toInt()
-        val mt = ClockMetrics.load(act, compact)
+        val mt = ClockMetrics.load(act, compact)?.takeIf { it.gh < it.sh * 0.75f && it.gw > it.sw * 0.15f && it.gw <= it.sw }
         val ph = (pw * (if (mt != null) mt.sh.toFloat() / mt.sw else 2.16f)).toInt()
         val box = FrameLayout(act)
         val wd = wallpaper(act)

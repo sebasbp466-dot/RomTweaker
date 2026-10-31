@@ -117,14 +117,16 @@ class FlexPreview(ctx: Context) : View(ctx) {
         p.textAlign = Paint.Align.CENTER
         try { p.setFontVariationSettings("'wght' " + cfg.weight + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { }
         val mt = metrics
-        if (mt != null && mt.digits.isNotEmpty()) {
-            val all = hh + mm
-            val single = mt.digits.size == 4 && mt.digits.all { it.t.length == 1 }
-            for (i in mt.digits.indices) {
-                val d = mt.digits[i]
-                p.textSize = d.size * scale
-                val txt = if (single) all[i].toString() else if (mt.digits.size == 1) hh + ":" + mm else d.t
-                c.drawText(txt, (d.cx - mt.gx) * scale, (d.base - mt.gy) * scale, p)
+        if (mt != null) {
+            val sc = scale
+            val cx = (mt.sw / 2f - mt.gx) * sc
+            if (compact) {
+                p.textSize = mt.sh * 0.101f * sc
+                c.drawText(hh + ":" + mm, cx, (mt.sh * 0.143f - mt.gy) * sc, p)
+            } else {
+                p.textSize = mt.sh * 0.216f * sc
+                c.drawText(hh, cx, (mt.sh * 0.482f - mt.gy) * sc, p)
+                c.drawText(mm, cx, (mt.sh * 0.653f - mt.gy) * sc, p)
             }
         } else if (compact) {
             p.textSize = h * 0.101f
