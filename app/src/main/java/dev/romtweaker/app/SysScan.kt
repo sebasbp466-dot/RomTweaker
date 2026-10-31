@@ -10,7 +10,7 @@ class SysFeature(val label: String, val found: Boolean, val support: String)
 object SysScan {
     private val feats = listOf(
         Triple("Reloj de la barra de estado", "Lcom/android/systemui/statusbar/policy/Clock;", "soportado (formato propio)"),
-        Triple("Reloj de bloqueo por plugins (Android 14+)", "Lcom/android/systemui/shared/clocks/ClockRegistry;", "en preparación"),
+        Triple("Reloj de bloqueo por plugins (Android 14+)", "Lcom/android/systemui/shared/clocks/ClockRegistry;", "soportado (cristal, degradado, fuente, medidas)"),
         Triple("Reloj de bloqueo clásico (Android 13 o menos)", "Lcom/android/keyguard/KeyguardClockSwitch;", "en preparación"),
         Triple("Cabecera del panel de ajustes", "Lcom/android/systemui/shade/ShadeHeaderController;", "en preparación"),
         Triple("Medidor de batería", "Lcom/android/systemui/battery/BatteryMeterViewController;", "en preparación"),

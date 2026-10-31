@@ -257,8 +257,21 @@ class HubActivity : Activity() {
         }
         val groups = LinkedHashMap<String, MutableList<IcoItem>>()
         for (i in items) groups.getOrPut(i.group) { ArrayList() }.add(i)
+        val cat = hubPrefs.getString("ico_cat", "") ?: ""
+        val catRow = LinearLayout(this)
+        catRow.orientation = LinearLayout.HORIZONTAL
+        catRow.addView(m.chip("Todos", cat.isEmpty() || !groups.containsKey(cat)) { hubPrefs.edit().putString("ico_cat", "").apply(); show(1) }, m.lp(m.WC, m.WC, 0, 0, 8, 0))
+        for (gk in groups.keys) {
+            val gg = gk
+            catRow.addView(m.chip(gg, cat == gg) { hubPrefs.edit().putString("ico_cat", gg).apply(); show(1) }, m.lp(m.WC, m.WC, 0, 0, 8, 0))
+        }
+        val catScroll = android.widget.HorizontalScrollView(this)
+        catScroll.isHorizontalScrollBarEnabled = false
+        catScroll.addView(catRow)
+        p.addView(catScroll, m.lp(m.MP, m.WC, 0, 0, 0, 12))
         for (entry in groups.entries) {
             val g = entry.key
+            if (cat.isNotEmpty() && groups.containsKey(cat) && g != cat) continue
             val cur = icoPrefs.getString(g, "") ?: ""
             val c = m.card()
             c.addView(m.tv(g, 20f, m.onSurface, true))

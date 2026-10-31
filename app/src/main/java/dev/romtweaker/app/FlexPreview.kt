@@ -123,12 +123,12 @@ class FlexPreview(ctx: Context) : View(ctx) {
             val all = hh + mm
             if (!compact && d.size == 4 && d.all { it.t.length == 1 }) {
                 for (i in 0 until 4) {
-                    p.textSize = d[i].size * sc
+                    p.textSize = d[i].size * sc * 0.95f
                     c.drawText(all[i].toString(), (d[i].cx - mt.gx) * sc, (d[i].base - 0.436f * d[i].size - mt.gy) * sc, p)
                 }
             } else if (compact && d.size == 1) {
                 val txt = if (d[0].t.length == 4) hh.toInt().toString() + ":" + mm else hh + ":" + mm
-                p.textSize = d[0].size * sc
+                p.textSize = d[0].size * sc * 0.95f
                 c.drawText(txt, (d[0].cx - mt.gx) * sc, (d[0].base - 0.436f * d[0].size - mt.gy) * sc, p)
             } else if (compact) {
                 p.textSize = mt.sh * 0.101f * sc

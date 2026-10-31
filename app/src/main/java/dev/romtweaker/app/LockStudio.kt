@@ -109,7 +109,7 @@ object LockStudio {
         val date = TextView(act)
         date.setTextColor(Color.WHITE)
         date.setTextSize(TypedValue.COMPLEX_UNIT_PX, ph * 0.0187f)
-        date.text = android.text.format.DateFormat.format("EEE, d MMM", java.util.Calendar.getInstance()).toString()
+        date.text = android.text.format.DateFormat.format("EEE, d 'de' MMM", java.util.Calendar.getInstance()).toString().replaceFirstChar { it.uppercase() }
         val dl = FrameLayout.LayoutParams(-2, -2)
         dl.leftMargin = (pw * 0.083f).toInt()
         dl.topMargin = (ph * (if (compact) 0.205f else 0.072f)).toInt()
