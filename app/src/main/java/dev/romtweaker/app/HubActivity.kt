@@ -128,7 +128,7 @@ class HubActivity : Activity() {
 
     private fun renderNav() {
         nav.removeAllViews()
-        val names = listOf("Inicio", "Iconify", "Xposed", "Bloqueo", "Ajustes")
+        val names = listOf("Inicio", "Iconify", "Xposed", "Bloqueo", "Más")
         val icons = listOf("⌂", "✦", "⚡", "◐", "☰")
         for (i in names.indices) {
             val it2 = m.navItem(icons[i], names[i], i == tab) { show(i) }
@@ -144,7 +144,7 @@ class HubActivity : Activity() {
             1 -> pageIconify()
             2 -> pageXposed()
             3 -> LockStudio.page(this, m, { msg -> say(msg) }, { refresh() })
-            else -> ClassicHost.page(this) { msg -> say(msg) }
+            else -> pageMore()
         }
         scroll.addView(v)
         scroll.scrollTo(0, 0)
@@ -199,9 +199,9 @@ class HubActivity : Activity() {
         add(p, c2)
 
         val c3 = m.card()
-        c3.addView(m.tv("Ajustes clásicos", 18f, m.onSurface, true))
+        c3.addView(m.tv("Ajustes del sistema", 18f, m.onSurface, true))
         c3.addView(m.tv("Colores, perfiles, formas de iconos, Centro de control propio, explorador de recursos, importación de overlays y diagnóstico.", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 12))
-        c3.addView(m.tonal("Abrir ajustes clásicos") { startActivity(Intent(this, MainActivity::class.java)) })
+        c3.addView(m.tonal("Abrir ajustes del sistema") { hubPrefs.edit().putInt("ico_sec", 1).apply(); show(1) })
         add(p, c3)
         return p
     }
@@ -227,6 +227,15 @@ class HubActivity : Activity() {
 
     private fun pageIconify(): View {
         val p = page("Iconify", "${items.size} estilos portados · código de Mahmud0808/Iconify")
+        val sec = hubPrefs.getInt("ico_sec", 0)
+        val seg = RtFlow(this, m.dp(8))
+        seg.addView(m.chip("Estilos Iconify", sec == 0) { hubPrefs.edit().putInt("ico_sec", 0).apply(); show(1) })
+        seg.addView(m.chip("Sistema y ajustes", sec == 1) { hubPrefs.edit().putInt("ico_sec", 1).apply(); show(1) })
+        p.addView(seg, m.lp(m.MP, m.WC, 0, 0, 0, 14))
+        if (sec == 1) {
+            for (v in ClassicHost.sections(this, m) { msg -> say(msg) }) add(p, v)
+            return p
+        }
         if (items.isEmpty()) {
             val c = m.card()
             c.addView(m.tv("Esta compilación no incluye overlays de Iconify (falló su compilación en GitHub Actions). Vuelve a ejecutar el comando de actualización.", 14f, m.onSurfaceVar))

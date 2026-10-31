@@ -56,15 +56,12 @@ class ClassicPages(val act: Activity, val ui: Ui, private val report: (String) -
             }
         }.start()
     }
-    private fun page(build: (LinearLayout) -> Unit): ScrollView {
+    private fun page(build: (LinearLayout) -> Unit): LinearLayout {
         val col = LinearLayout(act)
         col.orientation = LinearLayout.VERTICAL
-        col.setPadding(ui.dp(16), ui.dp(4), ui.dp(16), ui.dp(24))
+        col.setPadding(0, ui.dp(4), 0, ui.dp(8))
         build(col)
-        val sv = ScrollView(act)
-        sv.isVerticalScrollBarEnabled = false
-        sv.addView(col)
-        return sv
+        return col
     }
     var onTab: (Int) -> Unit = {}
     private fun showTab(i: Int) { onTab(i) }
