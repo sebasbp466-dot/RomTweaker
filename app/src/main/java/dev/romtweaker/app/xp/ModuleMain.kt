@@ -68,6 +68,61 @@ class ModuleMain : XposedModule() {
         }
     }
 
+    private val mLast = HashMap<String, String>()
+    private val mTime = HashMap<String, Long>()
+    private val liveViews = java.util.WeakHashMap<android.view.View, Boolean>()
+    private var liveListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+
+    /** Envía a la app las medidas REALES del reloj (posición, tamaño, dígitos) y reaplica el efecto al cambiar ajustes. */
+    private fun pushMetrics(v: android.view.View, kind: String, prefs: SharedPreferences?) {
+        try {
+            liveViews[v] = true
+            if (liveListener == null && prefs != null) {
+                val l = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+                    try { for (x in liveViews.keys.toList()) x.post { x.invalidate() } } catch (e: Throwable) { }
+                }
+                liveListener = l
+                prefs.registerOnSharedPreferenceChangeListener(l)
+            }
+            val now = android.os.SystemClock.uptimeMillis()
+            if (now - (mTime[kind] ?: 0L) < 1500L) return
+            if (!v.isShown || v.width <= 0 || v.alpha < 0.99f) return
+            mTime[kind] = now
+            val dm = v.resources.displayMetrics
+            val loc = IntArray(2)
+            v.getLocationOnScreen(loc)
+            val arr = org.json.JSONArray()
+            fun walk(x: android.view.View) {
+                if (x is android.view.ViewGroup) {
+                    for (i in 0 until x.childCount) walk(x.getChildAt(i))
+                } else if (x is TextView && x.visibility == android.view.View.VISIBLE && x.text.isNotEmpty()) {
+                    val l2 = IntArray(2)
+                    x.getLocationOnScreen(l2)
+                    val o = org.json.JSONObject()
+                    o.put("t", x.text.toString())
+                    o.put("cx", (l2[0] + x.width / 2f).toDouble())
+                    o.put("base", (l2[1] + x.baseline).toDouble())
+                    o.put("size", x.textSize.toDouble())
+                    arr.put(o)
+                }
+            }
+            walk(v)
+            if (arr.length() == 0) return
+            val j = org.json.JSONObject()
+            j.put("sw", dm.widthPixels); j.put("sh", dm.heightPixels)
+            j.put("gx", loc[0]); j.put("gy", loc[1]); j.put("gw", v.width); j.put("gh", v.height)
+            j.put("d", arr)
+            val str = j.toString()
+            if (mLast[kind] == str) return
+            mLast[kind] = str
+            val it = android.content.Intent("dev.romtweaker.app.CLOCK_METRICS").setPackage("dev.romtweaker.app")
+            it.putExtra("kind", kind)
+            it.putExtra("json", str)
+            v.context.sendBroadcast(it)
+            log(Log.INFO, TAG, "medidas enviadas ($kind): " + str.take(160))
+        } catch (e: Throwable) { log(Log.WARN, TAG, "metricas: $e") }
+    }
+
     private fun argb(c: Int, f: Float): Int = (c and 0x00FFFFFF) or ((f.coerceIn(0f, 1f) * 255).toInt() shl 24)
 
     /** Reloj nativo de la pantalla de bloqueo (FlexClock*): le aplica degradado/cristal/contorno al dibujar. */
@@ -187,6 +242,7 @@ class ModuleMain : XposedModule() {
                 } else {
                     if (seen.add(v.javaClass.name)) log(Log.INFO, TAG, "dibuja ${v.javaClass.name} ${v.width}x${v.height}")
                     diag(v)
+                    pushMetrics(v, "stack", prefs)
                     val st = prefs?.getString("lk_style", "glass") ?: "glass"
                     val col = (prefs?.getString("lk_color", "-1") ?: "-1").toIntOrNull() ?: -1
                     val acc = (prefs?.getString("lk_accent", "-34243") ?: "-34243").toIntOrNull() ?: -34243
@@ -478,6 +534,7 @@ class ModuleMain : XposedModule() {
                 if (v != null && v.javaClass.name.startsWith(base) &&
                     (v.parent?.javaClass?.name ?: "") != base + "ViewGroup" &&
                     (prefs?.getBoolean("lk_on", true) ?: true)) {
+                    pushMetrics(v, "compact", prefs)
                     fxApply(v, prefs, applied)
                 }
                 chain.proceed()

@@ -48,5 +48,11 @@
     <receiver android:name=".LockBootReceiver" android:exported="true">
         <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
     </receiver>
+    <receiver android:name=".ClockMetricsReceiver" android:exported="true">
+        <intent-filter><action android:name="dev.romtweaker.app.CLOCK_METRICS" /></intent-filter>
+    </receiver>
+    <service android:name=".LockPanelService" android:exported="false" android:foregroundServiceType="specialUse">
+        <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="lock_panel_overlay" />
+    </service>
 </application>
 </manifest>

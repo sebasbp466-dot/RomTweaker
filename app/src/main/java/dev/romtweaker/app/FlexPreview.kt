@@ -16,6 +16,8 @@ import java.util.Calendar
 class FlexPreview(ctx: Context) : View(ctx) {
     var cfg = ClockCfg()
     var compact = false
+    var metrics: ClockMetrics? = null
+    var scale = 1f
     var fontName = "sistema"
     private var tf: Typeface = Typeface.DEFAULT
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -114,7 +116,17 @@ class FlexPreview(ctx: Context) : View(ctx) {
         p.color = Color.WHITE
         p.textAlign = Paint.Align.CENTER
         try { p.setFontVariationSettings("'wght' " + cfg.weight + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { }
-        if (compact) {
+        val mt = metrics
+        if (mt != null && mt.digits.isNotEmpty()) {
+            val all = hh + mm
+            val single = mt.digits.size == 4 && mt.digits.all { it.t.length == 1 }
+            for (i in mt.digits.indices) {
+                val d = mt.digits[i]
+                p.textSize = d.size * scale
+                val txt = if (single) all[i].toString() else if (mt.digits.size == 1) hh + ":" + mm else d.t
+                c.drawText(txt, (d.cx - mt.gx) * scale, (d.base - mt.gy) * scale, p)
+            }
+        } else if (compact) {
             p.textSize = h * 0.101f
             c.drawText(hh + ":" + mm, w / 2f, h * 0.143f, p)
         } else {

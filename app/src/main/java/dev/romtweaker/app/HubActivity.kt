@@ -106,6 +106,7 @@ class HubActivity : Activity() {
     override fun onResume() {
         super.onResume()
         applyBlur()
+        if (tab == 3 && ::scroll.isInitialized) refresh()
     }
 
     private fun applyBlur() {

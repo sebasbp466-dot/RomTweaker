@@ -77,7 +77,8 @@ object LockStudio {
         // ---- vista previa ----
         val dm = act.resources.displayMetrics
         val pw = (dm.widthPixels * 0.62f).toInt()
-        val ph = (pw * 2.16f).toInt()
+        val mt = ClockMetrics.load(act, compact)
+        val ph = (pw * (if (mt != null) mt.sh.toFloat() / mt.sw else 2.16f)).toInt()
         val box = FrameLayout(act)
         val wd = wallpaper(act)
         if (wd != null) {
@@ -94,7 +95,17 @@ object LockStudio {
         val face = FlexPreview(act)
         face.cfg = cfg
         face.compact = compact
-        box.addView(face, FrameLayout.LayoutParams(-1, -1))
+        if (mt != null) {
+            val sc = pw.toFloat() / mt.sw
+            face.metrics = mt
+            face.scale = sc
+            val fl = FrameLayout.LayoutParams((mt.gw * sc).toInt(), (mt.gh * sc).toInt())
+            fl.leftMargin = (mt.gx * sc).toInt()
+            fl.topMargin = (mt.gy * sc).toInt()
+            box.addView(face, fl)
+        } else {
+            box.addView(face, FrameLayout.LayoutParams(-1, -1))
+        }
         val date = TextView(act)
         date.setTextColor(Color.WHITE)
         date.setTextSize(TypedValue.COMPLEX_UNIT_PX, ph * 0.0187f)
@@ -113,7 +124,7 @@ object LockStudio {
         p.addView(box, bl)
 
         fun live() { face.cfg = cfg; face.refreshFx() }
-        fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", true)) LockXp.apply(cfg, true); refresh() }
+        fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", true)) LockXp.apply(cfg, true); if (lp.getBoolean("lk_live", false)) { Thread { Sx.su("input keyevent 223; sleep 1; input keyevent 224") }.start() }; refresh() }
 
         val fm = RtFlow(act, m.dp(8))
         fm.addView(m.chip("Pantalla completa", !compact) { lp.edit().putBoolean("pv_compact", false).apply(); refresh() })
@@ -197,6 +208,13 @@ object LockStudio {
             say("Reiniciando SystemUI…")
             Thread { Sx.su("killall com.android.systemui") }.start()
         }, m.lp(m.WC, m.WC, 0, 10, 0, 0))
+        cr.addView(m.tonal("Ver bloqueo ahora") { Thread { Sx.su("input keyevent 223; sleep 1; input keyevent 224") }.start(); say("Mostrando tu bloqueo real…") }, m.lp(m.WC, m.WC, 0, 8, 0, 0))
+        cr.addView(m.switchRow("Probar en vivo", "Tras cada cambio bloquea y muestra el reloj real", lp.getBoolean("lk_live", false)) { v -> lp.edit().putBoolean("lk_live", v).apply() }, m.lp(m.MP, m.WC, 0, 12, 0, 0))
+        cr.addView(m.switchRow("Panel flotante (experimental)", "Controles encima de tu bloqueo real, si la ROM lo permite", lp.getBoolean("lk_panel", false)) { v ->
+            lp.edit().putBoolean("lk_panel", v).apply()
+            try { LockPanelService.toggle(act, v); say(if (v) "Panel activo: bloquea el teléfono para probarlo" else "Panel cerrado") } catch (e: Throwable) { say("No pude abrir el panel: " + e.message) }
+        }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
+        cr.addView(m.tv(ClockMetrics.status(act), 12f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 10, 0, 0))
         p.addView(cr, m.lp(m.MP, m.WC, 0, 0, 0, 12))
         return p
     }
