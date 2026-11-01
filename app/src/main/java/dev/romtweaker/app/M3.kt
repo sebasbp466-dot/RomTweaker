@@ -108,7 +108,7 @@ class M3(val ctx: Context, var glass: Boolean) {
         val l = LinearLayout(ctx)
         l.orientation = LinearLayout.VERTICAL
         l.setPadding(dp(20), dp(18), dp(20), dp(18))
-        l.background = if (glass) LiquidGlassDrawable(dp(28).toFloat(), surfaceCont, dark, ctx.resources.displayMetrics.density) else shape(a(surfaceCont, cardA), 28, 0, 0)
+        l.background = shape(a(surfaceCont, cardA), 28, if (glass) 1 else 0, a(Color.WHITE, 0.28f))
         return l
     }
 
@@ -130,7 +130,7 @@ class M3(val ctx: Context, var glass: Boolean) {
         t.gravity = Gravity.CENTER
         t.minHeight = dp(34)
         t.setPadding(dp(14), dp(6), dp(14), dp(6))
-        val base = if (selected) shape(if (glass) a(secContainer, 0.7f) else secContainer, 10) else shape(Color.TRANSPARENT, 10, 1, a(outline, 0.8f))
+        val base = if (selected) shape(secContainer, 10) else shape(Color.TRANSPARENT, 10, 1, a(outline, 0.8f))
         t.background = ripple(base, 10)
         t.setOnClickListener { click() }
         return t

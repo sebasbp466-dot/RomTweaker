@@ -49,7 +49,7 @@ class HubActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        m = M3(this, hubPrefs.getBoolean("glass", true))
+        m = M3(this, hubPrefs.getBoolean("glass", false))
         items = IcoCat.load(this)
         tab = savedInstanceState?.getInt("tab") ?: 0
         if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
@@ -374,7 +374,7 @@ class HubActivity : Activity() {
         val p = page("Más", "Apariencia, créditos y mantenimiento")
         val c = m.card()
         c.addView(m.tv("Apariencia", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 8))
-        c.addView(m.switchRow("Estilo cristal", "Superficies más transparentes sobre el blur", hubPrefs.getBoolean("glass", true)) { v ->
+        c.addView(m.switchRow("Estilo cristal", "Superficies más transparentes sobre el blur", hubPrefs.getBoolean("glass", false)) { v ->
             hubPrefs.edit().putBoolean("glass", v).apply()
             recreate()
         })
