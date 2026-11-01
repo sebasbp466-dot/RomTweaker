@@ -9,6 +9,8 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
 import android.util.TypedValue
+import android.view.Choreographer
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -30,6 +32,8 @@ object IcModule {
     private var lastView: WeakReference<View>? = null
     private var listener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var errs = 0
+    private val stock = java.util.WeakHashMap<View, Boolean>()
+    private var mirroring = false
 
     private fun find(c0: Class<*>?, name: String): java.lang.reflect.Method? {
         var c = c0
@@ -57,6 +61,7 @@ object IcModule {
                         chain.proceed()
                     } else {
                         lastView = WeakReference(v)
+                        if (!stock.containsKey(v)) stock[v] = true
                         val on = prefs?.getBoolean("ic_on", false) ?: false
                         var hide = false
                         try { hide = handle(x, v, prefs, on) } catch (e: Throwable) {
@@ -110,7 +115,8 @@ object IcModule {
     /** devuelve true si hay que NO dibujar el reloj de serie */
     private fun handle(x: XposedModule, v: View, prefs: SharedPreferences?, on: Boolean): Boolean {
         val cur = cont?.get()
-        if (!on) {
+        val sc = prefs?.getBoolean("sc_on", false) ?: false
+        if (!on && !sc) {
             if (cur != null) {
                 cont = null; contKey = ""
                 v.post { try { val r = cur.parent as? ViewGroup; r?.removeView(cur); r?.let { hideDate(it, false); it.requestLayout() } } catch (e: Throwable) { } }
@@ -121,19 +127,53 @@ object IcModule {
         val n = gi("ic_style", 1)
         val top = gi("ic_top", 100)
         val bot = gi("ic_bottom", 40)
-        val sc = gi("ic_scale", 100)
+        val scl = gi("ic_scale", 100)
         val hd = prefs?.getBoolean("ic_date", true) ?: true
-        val key = "$n|$top|$bot|$sc|$hd"
-        if (cur != null && cur.isAttachedToWindow && key == contKey) return true
+        val scCfg = if (sc) (prefs?.getString("sc_cfg", "") ?: "") else ""
+        val key = if (sc) "S|$scCfg" else "$n|$top|$bot|$scl|$hd"
+        if (cur != null && cur.isAttachedToWindow && key == contKey) { startMirror(cur); return true }
         if (building) return true
         val r = root(v) ?: return false
         building = true
         v.post {
-            try { build(x, r, cur, n, top, bot, sc, hd, key) }
+            try { build(x, r, cur, n, top, bot, scl, if (sc) true else hd, key, if (sc) scCfg else null) }
             catch (e: Throwable) { contKey = ""; x.log(Log.WARN, TAG, "ic: build " + Log.getStackTraceString(e)) }
             finally { building = false }
         }
         return true
+    }
+
+    /** Copia la transparencia y el desplazamiento del reloj de serie (que anima SystemUI) al nuestro, fotograma a fotograma. */
+    private fun startMirror(c: FrameLayout) {
+        if (mirroring) return
+        mirroring = true
+        val cb = object : Choreographer.FrameCallback {
+            override fun doFrame(t: Long) {
+                try {
+                    val cc = cont?.get()
+                    val r = rootRef?.get()
+                    if (cc == null || r == null || !cc.isAttachedToWindow || !r.isShown) { mirroring = false; return }
+                    var best = -1f
+                    var bty = 0f
+                    for (e in stock.entries) {
+                        val sv = e.key
+                        if (!sv.isAttachedToWindow || !sv.isShown) continue
+                        var a = 1f
+                        var ty = 0f
+                        var p: View? = sv
+                        var d = 0
+                        while (p != null && p !== r && d < 10) { a *= p.alpha; ty += p.translationY; p = p.parent as? View; d++ }
+                        if (a > best) { best = a; bty = ty }
+                    }
+                    if (best >= 0f) {
+                        if (cc.alpha != best) cc.alpha = best
+                        if (cc.translationY != bty) cc.translationY = bty
+                    }
+                    Choreographer.getInstance().postFrameCallback(this)
+                } catch (e: Throwable) { mirroring = false }
+            }
+        }
+        Choreographer.getInstance().postFrameCallback(cb)
     }
 
     private fun dateView(r: ViewGroup): View? {
@@ -165,15 +205,31 @@ object IcModule {
         if (v is ViewGroup) for (i in 0 until v.childCount) scaleText(v.getChildAt(i), f)
     }
 
-    private fun build(x: XposedModule, r: ViewGroup, cur: FrameLayout?, n: Int, top: Int, bot: Int, sc: Int, hd: Boolean, key: String) {
+    private fun build(x: XposedModule, r: ViewGroup, cur: FrameLayout?, n: Int, top: Int, bot: Int, sc: Int, hd: Boolean, key: String, studio: String?) {
         val ctx = r.context
-        val pkg = ctx.createPackageContext(APP, Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY)
-        val id = pkg.resources.getIdentifier("preview_lockscreen_clock_$n", "layout", APP)
-        if (id == 0) { x.log(Log.WARN, TAG, "ic: no existe el layout $n en la app"); return }
-        val inflated = LayoutInflater.from(pkg).inflate(id, null)
         val d = ctx.resources.displayMetrics.density
-        if (n != 10) titleAll(inflated)
-        if (sc != 100) scaleText(inflated, sc / 100f)
+        val inflated: View
+        val ml = FrameLayout.LayoutParams(-1, -2)
+        if (studio != null) {
+            val sk = dev.romtweaker.app.StudioClock(ctx)
+            val cfg = dev.romtweaker.app.StudioCfg.parse(studio)
+            sk.setCfg(cfg)
+            sk.translationX = cfg.cx / 100f * ctx.resources.displayMetrics.widthPixels
+            inflated = sk
+            ml.width = -2
+            ml.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            ml.topMargin = (cfg.top * d).toInt()
+            ml.bottomMargin = (24 * d).toInt()
+        } else {
+            val pkg = ctx.createPackageContext(APP, Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY)
+            val id = pkg.resources.getIdentifier("preview_lockscreen_clock_$n", "layout", APP)
+            if (id == 0) { x.log(Log.WARN, TAG, "ic: no existe el layout $n en la app"); return }
+            inflated = LayoutInflater.from(pkg).inflate(id, null)
+            if (n != 10) titleAll(inflated)
+            if (sc != 100) scaleText(inflated, sc / 100f)
+            ml.topMargin = (top * d).toInt()
+            ml.bottomMargin = (bot * d).toInt()
+        }
         val c: FrameLayout
         if (cur != null && cur.parent === r) {
             c = cur
@@ -191,16 +247,14 @@ object IcModule {
             c.layoutParams = lp
             r.addView(c)
         }
-        val ml = FrameLayout.LayoutParams(-1, -2)
-        ml.topMargin = (top * d).toInt()
-        ml.bottomMargin = (bot * d).toInt()
         c.addView(inflated, ml)
         cont = WeakReference(c)
         rootRef = WeakReference(r)
         contKey = key
         hideDate(r, hd)
         try { anchor(r, c.id) } catch (e: Throwable) { x.log(Log.WARN, TAG, "ic: ancla " + e) }
-        x.log(Log.INFO, TAG, "ic: reloj $n top=$top bottom=$bot escala=$sc")
+        x.log(Log.INFO, TAG, "ic: reloj " + (if (studio != null) "estudio" else n.toString()) + " top=$top bottom=$bot escala=$sc")
+        startMirror(c)
     }
 
     /** Pone las notificaciones (y los iconos de AOD) justo debajo del contenedor del reloj. */

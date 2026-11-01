@@ -54,5 +54,8 @@
     <service android:name=".LockPanelService" android:exported="false" android:foregroundServiceType="specialUse">
         <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="lock_panel_overlay" />
     </service>
+    <activity android:name=".ClockEditActivity" android:exported="false" android:theme="@style/LockTheme"
+        android:showWhenLocked="true" android:excludeFromRecents="true"
+        android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
 </application>
 </manifest>
