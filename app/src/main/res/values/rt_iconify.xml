@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="material_dynamic_primary10">@android:color/system_accent1_900</color>
+    <color name="material_dynamic_primary80">@android:color/system_accent1_200</color>
+    <color name="material_dynamic_secondary10">@android:color/system_accent2_900</color>
+    <color name="material_dynamic_secondary90">@android:color/system_accent2_100</color>
+    <color name="material_dynamic_tertiary20">@android:color/system_accent3_800</color>
+    <string name="default_user_name">User</string>
+    <string name="welcome_back">Welcome back!</string>
+</resources>

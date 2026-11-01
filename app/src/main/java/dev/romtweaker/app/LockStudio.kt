@@ -221,6 +221,7 @@ object LockStudio {
         }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
         cr.addView(m.tv(ClockMetrics.status(act), 12f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 10, 0, 0))
         if (sec == 3) p.addView(cr, m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        p.addView(IcClocks.card(act, m, say, refresh), m.lp(m.MP, m.WC, 0, 0, 0, 12))
         return p
     }
 }
