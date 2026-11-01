@@ -27,6 +27,7 @@ class ModuleMain : XposedModule() {
         hookWeight(param.classLoader, prefs)
         hookLockSmall(param.classLoader, prefs)
         IcModule.install(this, param.classLoader, prefs)
+        IcxHide.install(this, prefs)
     }
 
     private fun formatted(prefs: SharedPreferences?, orig: Any?): Any? {
