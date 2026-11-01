@@ -98,7 +98,7 @@ object IcxHide {
                 val r = chain.proceed()
                 try {
                     val v = chain.thisObject as? View
-                    if (v != null && v.context.packageName == PKG) onAttach(x, v, prefs)
+                    if (v != null && v.context.packageName == PKG) { IcxScan.view(x, v); onAttach(x, v, prefs) }
                 } catch (e: Throwable) { if (errs++ < 5) x.log(Log.WARN, TAG, "hx: " + Log.getStackTraceString(e)) }
                 r
             }
