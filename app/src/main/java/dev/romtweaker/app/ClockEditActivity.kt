@@ -274,6 +274,8 @@ object StudioPush {
         ok = bridge("putBool", "ic_on", p.getBoolean("ic_on", false)) && ok
         return ok
     }
+
+    fun pushLp(p: android.content.SharedPreferences): Boolean = bridge("putBool", "lp_on", p.getBoolean("lp_on", false))
 }
 
 /** Tarjeta en la pestaña Bloqueo para abrir el editor. */
@@ -291,7 +293,17 @@ object StudioCard {
             else if (v) say("Aplicado. Bloquea la pantalla para verlo")
             else { say("Restaurando el reloj original (reiniciando SystemUI)…"); Thread { Sx.su("killall com.android.systemui") }.start() }
         })
-        c.addView(m.filled("Abrir editor") { act.startActivity(Intent(act, ClockEditActivity::class.java)) }, m.lp(m.WC, m.WC, 0, 12, 0, 0))
+        c.addView(m.switchRow("Abrir con pulsación larga en el bloqueo", "Mantén pulsado un espacio vacío de la pantalla de bloqueo", p.getBoolean("lp_on", false)) { v ->
+            p.edit().putBoolean("lp_on", v).apply()
+            val ok = StudioPush.pushLp(p)
+            say(if (!ok) "El módulo no está activo en LSPosed" else "Guardado. Reinicia SystemUI para aplicar")
+        }, m.lp(m.MP, m.WC, 0, 8, 0, 0))
+        val br = LinearLayout(act)
+        br.orientation = LinearLayout.HORIZONTAL
+        br.addView(m.filled("Galería de estilos") { act.startActivity(Intent(act, LockGalleryActivity::class.java)) }, m.lp(m.WC, m.WC, 0, 0, 8, 0))
+        br.addView(m.tonal("Abrir editor") { act.startActivity(Intent(act, ClockEditActivity::class.java)) }, m.lp(m.WC, m.WC))
+        c.addView(br, m.lp(m.WC, m.WC, 0, 12, 0, 0))
+        c.addView(m.tonal("Reiniciar SystemUI") { say("Reiniciando SystemUI…"); Thread { Sx.su("killall com.android.systemui") }.start() }, m.lp(m.WC, m.WC, 0, 8, 0, 0))
         return c
     }
 }

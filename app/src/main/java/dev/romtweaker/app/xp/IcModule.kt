@@ -45,7 +45,47 @@ object IcModule {
         return null
     }
 
+    private var lastLp = 0L
+
+    /** Abre la galería de estilos sobre la pantalla de bloqueo (sin abrir la app). */
+    fun launchGallery(x: XposedModule): Boolean {
+        return try {
+            val now = System.currentTimeMillis()
+            if (now - lastLp < 1500) return true
+            lastLp = now
+            val app = Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as android.app.Application
+            val i = android.content.Intent().setClassName("dev.romtweaker.app", "dev.romtweaker.app.LockGalleryActivity")
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            app.startActivity(i)
+            x.log(Log.INFO, TAG, "lp: galería lanzada")
+            true
+        } catch (e: Throwable) {
+            x.log(Log.WARN, TAG, "lp: fallo al lanzar " + Log.getStackTraceString(e))
+            false
+        }
+    }
+
+    fun installLongPress(x: XposedModule, cl: ClassLoader, prefs: SharedPreferences?) {
+        try {
+            var n = 0
+            for (cn in listOf("com.android.systemui.keyguard.domain.interactor.KeyguardTouchHandlingInteractor")) {
+                val k = try { Class.forName(cn, false, cl) } catch (e: Throwable) { null } ?: continue
+                for (m in k.declaredMethods) {
+                    if (m.name != "onLongPress") continue
+                    x.hook(m).intercept { chain ->
+                        if (prefs?.getBoolean("lp_on", false) == true && launchGallery(x)) null else chain.proceed()
+                    }
+                    n++
+                }
+            }
+            x.log(Log.INFO, TAG, "lp: onLongPress enganchado en $n métodos")
+        } catch (e: Throwable) {
+            x.log(Log.WARN, TAG, "lp: error " + Log.getStackTraceString(e))
+        }
+    }
+
     fun install(x: XposedModule, cl: ClassLoader, prefs: SharedPreferences?) {
+        installLongPress(x, cl, prefs)
         try {
             val grp = try { Class.forName(BASE + "ViewGroup", false, cl) } catch (e: Throwable) { null }
             val txt = try { Class.forName(BASE + "TextView", false, cl) } catch (e: Throwable) { null }
