@@ -41,8 +41,10 @@ class StudioCfg {
     var cx = 0f
     var sc = 100f
     var date = true
+    var font = "flex"
+    var ol = 0
 
-    fun enc(): String = "layout=$layout;wght=$wght;wdth=$wdth;rond=$rond;slnt=$slnt;fx=$fx;tr=$tr;color=$color;size=$size;top=$top;cx=$cx;sc=$sc;date=${if (date) 1 else 0}"
+    fun enc(): String = "layout=$layout;wght=$wght;wdth=$wdth;rond=$rond;slnt=$slnt;fx=$fx;tr=$tr;color=$color;size=$size;top=$top;cx=$cx;sc=$sc;date=${if (date) 1 else 0};font=$font;ol=$ol"
     fun copy(): StudioCfg = parse(enc())
 
     companion object {
@@ -69,6 +71,8 @@ class StudioCfg {
                         "cx" -> c.cx = v.toFloat()
                         "sc" -> c.sc = v.toFloat()
                         "date" -> c.date = v == "1"
+                        "font" -> c.font = v
+                        "ol" -> c.ol = v.toInt()
                     }
                 } catch (e: Throwable) { }
             }
@@ -209,17 +213,28 @@ class DigitsView(ctx: Context) : View(ctx) {
 
     private fun px(): Float {
         val d = resources.displayMetrics.density
-        return cfg.size * d * cfg.sc / 100f * (if (cfg.layout == "stack") 1f else 0.55f)
+        return cfg.size * d * cfg.sc / 100f * (when (cfg.layout) { "stack" -> 1f; "col" -> 0.78f; else -> 0.55f })
     }
 
     private fun setup(size: Float) {
         p.reset()
         p.isAntiAlias = true
-        p.typeface = StudioFont.get()
         p.color = Color.WHITE
         p.textAlign = Paint.Align.CENTER
         p.textSize = size
-        try { p.setFontVariationSettings("'wght' " + cfg.wght + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { }
+        when (cfg.font) {
+            "serif" -> p.typeface = Typeface.create(Typeface.SERIF, cfg.wght.coerceIn(100, 900), false)
+            "mono" -> p.typeface = Typeface.create(Typeface.MONOSPACE, cfg.wght.coerceIn(100, 900), false)
+            else -> {
+                p.typeface = StudioFont.get()
+                try { p.setFontVariationSettings("'wght' " + cfg.wght + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { }
+            }
+        }
+        if (cfg.ol == 1) {
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = maxOf(2f, size * 0.028f)
+            p.strokeJoin = Paint.Join.ROUND
+        }
     }
 
     fun refresh() {
@@ -241,8 +256,10 @@ class DigitsView(ctx: Context) : View(ctx) {
         capH = r.height().toFloat()
         pad = size * 0.10f
         val stack = cfg.layout == "stack"
-        val w = if (stack) maxOf(p.measureText(hh), p.measureText(mm)) else p.measureText("$hh:$mm")
-        val h = if (stack) capH * (2f + GAP) else capH
+        val col = cfg.layout == "col"
+        var w = if (stack) maxOf(p.measureText(hh), p.measureText(mm)) else p.measureText("$hh:$mm")
+        if (col) { w = 0f; for (ch in (hh + mm)) w = maxOf(w, p.measureText(ch.toString())) }
+        val h = if (stack) capH * (2f + GAP) else if (col) capH * (4f + 3f * GAP) else capH
         setMeasuredDimension((w + 2 * pad).toInt() + 1, (h + 2 * pad).toInt() + 1)
     }
 
@@ -253,6 +270,9 @@ class DigitsView(ctx: Context) : View(ctx) {
             val y1 = pad + capH
             c.drawText(hh, x, y1, p)
             c.drawText(mm, x, y1 + capH * (1f + GAP), p)
+        } else if (cfg.layout == "col") {
+            val all = hh + mm
+            for (i in 0 until 4) c.drawText(all.substring(i, i + 1), x, pad + capH + i * capH * (1f + GAP), p)
         } else {
             c.drawText("$hh:$mm", x, pad + capH, p)
         }

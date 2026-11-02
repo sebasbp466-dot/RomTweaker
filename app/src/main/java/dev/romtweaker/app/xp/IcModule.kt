@@ -69,6 +69,8 @@ object IcModule {
     private var lpX = 0f
     private var lpY = 0f
     private var lpSeen = false
+    private var lpPress: Runnable? = null
+    private var lpKg: View? = null
 
     /** Detecta nosotros la pulsación larga sobre la ventana del bloqueo (Lineage no dispara onLongPress). */
     fun installTouch(x: XposedModule, prefs: SharedPreferences?) {
@@ -98,6 +100,8 @@ object IcModule {
         if (act == android.view.MotionEvent.ACTION_DOWN) {
             lpRun?.let { v.removeCallbacks(it) }
             lpRun = null
+            lpPress?.let { v.removeCallbacks(it) }
+            lpPress = null
             val id = v.resources.getIdentifier("keyguard_root_view", "id", v.context.packageName)
             if (id == 0 || v.findViewById<View>(id) == null) return
             val kg = v.context.getSystemService(android.app.KeyguardManager::class.java)
@@ -106,7 +110,17 @@ object IcModule {
             val h = v.height.toFloat()
             if (ev.y < h * 0.10f || ev.y > h * 0.82f) return
             lpX = ev.x; lpY = ev.y
-            val r = Runnable { lpRun = null; launchGallery(x) }
+            lpKg = v.findViewById<View>(id)
+            val pr = Runnable { lpPress = null; lpKg?.animate()?.scaleX(0.94f)?.scaleY(0.94f)?.setDuration(240)?.start() }
+            lpPress = pr
+            v.postDelayed(pr, 260)
+            val r = Runnable {
+                lpRun = null
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                launchGallery(x)
+                val k = lpKg
+                if (k != null) k.postDelayed({ k.animate().scaleX(1f).scaleY(1f).setDuration(220).start() }, 900)
+            }
             lpRun = r
             v.postDelayed(r, 650)
         } else if (lpRun != null) {
@@ -116,7 +130,11 @@ object IcModule {
                 android.view.MotionEvent.ACTION_POINTER_DOWN, android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> true
                 else -> false
             }
-            if (cancel) { lpRun?.let { v.removeCallbacks(it) }; lpRun = null }
+            if (cancel) {
+                lpRun?.let { v.removeCallbacks(it) }; lpRun = null
+                lpPress?.let { v.removeCallbacks(it) }; lpPress = null
+                lpKg?.animate()?.scaleX(1f)?.scaleY(1f)?.setDuration(200)?.start()
+            }
         }
     }
 
