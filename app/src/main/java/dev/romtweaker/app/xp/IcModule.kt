@@ -65,6 +65,61 @@ object IcModule {
         }
     }
 
+    private var lpRun: Runnable? = null
+    private var lpX = 0f
+    private var lpY = 0f
+    private var lpSeen = false
+
+    /** Detecta nosotros la pulsación larga sobre la ventana del bloqueo (Lineage no dispara onLongPress). */
+    fun installTouch(x: XposedModule, prefs: SharedPreferences?) {
+        try {
+            val m = ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", android.view.MotionEvent::class.java)
+            x.hook(m).intercept { chain ->
+                try {
+                    val v = chain.thisObject as? ViewGroup
+                    if (v != null && v.parent != null && v.parent.javaClass.name == "android.view.ViewRootImpl" &&
+                        prefs?.getBoolean("lp_on", false) == true) {
+                        val ev = chain.getArg<android.view.MotionEvent>(0)
+                        lpTouch(x, v, ev)
+                    }
+                } catch (e: Throwable) {
+                    if (errs++ < 5) x.log(Log.WARN, TAG, "lp: error touch " + Log.getStackTraceString(e))
+                }
+                chain.proceed()
+            }
+            x.log(Log.INFO, TAG, "lp: detector de toque instalado")
+        } catch (e: Throwable) {
+            x.log(Log.WARN, TAG, "lp: no pude instalar el detector " + Log.getStackTraceString(e))
+        }
+    }
+
+    private fun lpTouch(x: XposedModule, v: ViewGroup, ev: android.view.MotionEvent) {
+        val act = ev.actionMasked
+        if (act == android.view.MotionEvent.ACTION_DOWN) {
+            lpRun?.let { v.removeCallbacks(it) }
+            lpRun = null
+            val id = v.resources.getIdentifier("keyguard_root_view", "id", v.context.packageName)
+            if (id == 0 || v.findViewById<View>(id) == null) return
+            val kg = v.context.getSystemService(android.app.KeyguardManager::class.java)
+            if (kg == null || !kg.isKeyguardLocked) return
+            if (!lpSeen) { lpSeen = true; x.log(Log.INFO, TAG, "lp: bloqueo detectado, esperando pulsación larga") }
+            val h = v.height.toFloat()
+            if (ev.y < h * 0.10f || ev.y > h * 0.82f) return
+            lpX = ev.x; lpY = ev.y
+            val r = Runnable { lpRun = null; launchGallery(x) }
+            lpRun = r
+            v.postDelayed(r, 650)
+        } else if (lpRun != null) {
+            val slop = android.view.ViewConfiguration.get(v.context).scaledTouchSlop * 1.5f
+            val cancel = when (act) {
+                android.view.MotionEvent.ACTION_MOVE -> Math.abs(ev.x - lpX) > slop || Math.abs(ev.y - lpY) > slop
+                android.view.MotionEvent.ACTION_POINTER_DOWN, android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> true
+                else -> false
+            }
+            if (cancel) { lpRun?.let { v.removeCallbacks(it) }; lpRun = null }
+        }
+    }
+
     fun installLongPress(x: XposedModule, cl: ClassLoader, prefs: SharedPreferences?) {
         try {
             var n = 0
@@ -86,6 +141,7 @@ object IcModule {
 
     fun install(x: XposedModule, cl: ClassLoader, prefs: SharedPreferences?) {
         installLongPress(x, cl, prefs)
+        installTouch(x, prefs)
         try {
             val grp = try { Class.forName(BASE + "ViewGroup", false, cl) } catch (e: Throwable) { null }
             val txt = try { Class.forName(BASE + "TextView", false, cl) } catch (e: Throwable) { null }
