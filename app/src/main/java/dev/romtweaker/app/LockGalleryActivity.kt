@@ -45,7 +45,7 @@ object StudioPresets {
 
     private const val W = 0xFFFFFFFF.toInt()
     val icPages = 5
-    val cats: List<String> = listOf("Centrados", "Clásicos", "Cristal", "Revista", "Material You", "Neón", "Color", "Mezcla", "Vertical", "Contorno") + (0 until icPages).map { "Iconify ${it * 12 + 1}–${it * 12 + 12}" }
+    val cats: List<String> = listOf("Centrados", "HyperOS 2", "Agujas", "Palabras", "Clásicos", "Cristal", "Revista", "Material You", "Neón", "Color", "Mezcla", "Vertical", "Contorno") + (0 until icPages).map { "Iconify ${it * 12 + 1}–${it * 12 + 12}" }
 
     private fun st(name: String, cat: String, f: StudioCfg.() -> Unit): P {
         val c = StudioCfg()
@@ -70,6 +70,42 @@ object StudioPresets {
         st("Anton", "Centrados") { layout = "stack"; font = "anton"; fx = "solid"; size = 205; gap = 6 },
         st("Estrecho", "Centrados") { layout = "stack"; font = "bigshoulders"; wght = 800; fx = "solid"; size = 225 },
         st("Bebas", "Centrados") { layout = "inline"; font = "bebas"; fx = "solid"; size = 400 },
+
+        // HyperOS 2 / populares
+        st("Bauhaus", "HyperOS 2") { layout = "stack"; wght = 900; wdth = 130; rond = 100; fx = "solid"; size = 170; color = 0xFFFFC857.toInt() },
+        st("Urbano", "HyperOS 2") { layout = "stack"; font = "anton"; xs = 85; fx = "solid"; size = 215; gap = 4; color = 0xFFFFE14D.toInt() },
+        st("Póster", "HyperOS 2") { layout = "stack"; font = "bebas"; fx = "solid"; size = 260; gap = 0; color = 0xFFFF5C5C.toInt() },
+        st("Retro", "HyperOS 2") { layout = "inline"; font = "syne"; wght = 800; fx = "solid"; size = 380 },
+        st("Europeo", "HyperOS 2") { layout = "stack"; font = "antonio"; wght = 100; xs = 120; gap = 22; fx = "solid"; size = 230 },
+        st("Periódico", "HyperOS 2") { layout = "col"; font = "dmserif"; fx = "solid"; size = 190 },
+        st("Oriental", "HyperOS 2") { layout = "grid"; wght = 300; wdth = 60; fx = "solid"; size = 230; gap = 12; color = 0xFFFFE6E6.toInt(); c2 = 0xFFFF4D4D.toInt() },
+        st("Gigante fino", "HyperOS 2") { layout = "stack"; wght = 100; wdth = 150; fx = "solid"; size = 220 },
+        st("Compacto", "HyperOS 2") { layout = "stack"; wght = 900; wdth = 60; gap = 0; fx = "solid"; size = 230 },
+        st("Cristal oriental", "HyperOS 2") { layout = "grid"; wght = 200; wdth = 50; fx = "glass"; tr = 35; size = 230 },
+        st("Mezcla bold", "HyperOS 2") { layout = "stack"; font = "anton"; fx = "blend"; tr = 10; size = 205 },
+        st("Aurora", "HyperOS 2") { layout = "inline"; font = "bodoni"; fx = "solid"; size = 360; color = 0xFFA0F0FF.toInt(); c2 = 0xFFFF9AD5.toInt() },
+
+        // Relojes de agujas
+        st("Minimal", "Agujas") { layout = "analog"; an = 1; fx = "solid"; size = 170 },
+        st("Bauhaus aguja", "Agujas") { layout = "analog"; an = 2; fx = "solid"; size = 170; color = 0xFFFF6B3D.toInt(); c2 = 0xFFFFFFFF.toInt() },
+        st("Puntos", "Agujas") { layout = "analog"; an = 3; fx = "solid"; size = 170; c2 = 0xFFFFD60A.toInt() },
+        st("Romano", "Agujas") { layout = "analog"; an = 4; fx = "solid"; size = 170; c2 = 0xFFFFD9A0.toInt() },
+        st("Sector", "Agujas") { layout = "analog"; an = 5; fx = "solid"; size = 170; c2 = 0xFF4DA3FF.toInt() },
+        st("Anillo", "Agujas") { layout = "analog"; an = 6; fx = "solid"; size = 170; c2 = 0xFFFF5C9E.toInt() },
+        st("Piruleta", "Agujas") { layout = "analog"; an = 7; fx = "solid"; size = 170; color = 0xFFFF9AD5.toInt(); c2 = 0xFFB388FF.toInt() },
+        st("Números", "Agujas") { layout = "analog"; an = 8; fx = "solid"; size = 170; c2 = 0xFFFF7A3D.toInt() },
+        st("Barras", "Agujas") { layout = "analog"; an = 9; fx = "solid"; size = 170; c2 = 0xFF4ADE80.toInt() },
+        st("Degradado", "Agujas") { layout = "analog"; an = 10; fx = "solid"; size = 170; color = 0xFFFFD36B.toInt(); c2 = 0xFFFF4E8A.toInt() },
+        st("Órbita", "Agujas") { layout = "analog"; an = 11; fx = "solid"; size = 170; c2 = 0xFFFFD60A.toInt() },
+        st("Aguja larga", "Agujas") { layout = "analog"; an = 12; fx = "solid"; size = 170; c2 = 0xFFFF5C5C.toInt() },
+        st("Cristal aguja", "Agujas") { layout = "analog"; an = 1; fx = "glass"; tr = 25; size = 170 },
+        st("Material aguja", "Agujas") { layout = "analog"; an = 2; fx = "solid"; size = 170; cmode = 3 },
+
+        // Reloj con palabras
+        st("Texto", "Palabras") { layout = "words"; wght = 600; fx = "solid"; size = 150 },
+        st("Texto serif", "Palabras") { layout = "words"; font = "bodoni"; fx = "solid"; size = 150 },
+        st("Texto fino", "Palabras") { layout = "words"; wght = 200; wdth = 80; fx = "solid"; size = 160 },
+        st("Texto cursivo", "Palabras") { layout = "words"; font = "caveat"; wght = 600; fx = "solid"; size = 170; color = 0xFFFFF3A3.toInt() },
 
         mk("Grueso", "Clásicos", "stack", 800, 100, 0, "solid", 0, W, 190),
         mk("Fino alto", "Clásicos", "stack", 200, 50, 0, "solid", 0, W, 215),
@@ -353,6 +389,15 @@ class LockGalleryActivity : Activity() {
 
         root = FrameLayout(this)
         root.setBackgroundColor(0xFF0A0B0F.toInt())
+        // el fondo del bloqueo se oscurece mientras la pantalla se "minimiza" en la tarjeta
+        val wallBg = ImageView(this)
+        wallBg.scaleType = ImageView.ScaleType.CENTER_CROP
+        wallBg.setImageBitmap(Hx.bgBitmap(this))
+        root.addView(wallBg, FrameLayout.LayoutParams(-1, -1))
+        val darkBg = View(this)
+        darkBg.setBackgroundColor(0xFF0A0B0F.toInt())
+        darkBg.alpha = 0f
+        root.addView(darkBg, FrameLayout.LayoutParams(-1, -1))
         stage = FrameLayout(this)
         root.addView(stage, FrameLayout.LayoutParams(-1, -1))
 
@@ -404,13 +449,15 @@ class LockGalleryActivity : Activity() {
         // Entrada: la pantalla de bloqueo "se aleja" y aparece la galería
         stage.pivotX = sw / 2f
         stage.pivotY = cy
-        stage.alpha = 0f
         stage.scaleX = 1f / 0.54f
         stage.scaleY = 1f / 0.54f
         topBar.alpha = 0f
+        nameTv.alpha = 0f
         layoutAll()
-        stage.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(520).setInterpolator(DecelerateInterpolator(1.9f)).start()
-        topBar.animate().alpha(1f).setStartDelay(260).setDuration(300).start()
+        val spring = android.view.animation.Interpolator { t -> (1.0 - Math.exp(-6.5 * t) * Math.cos(7.0 * t)).toFloat() }
+        stage.animate().scaleX(1f).scaleY(1f).setDuration(700).setInterpolator(spring).start()
+        darkBg.animate().alpha(0.96f).setDuration(520).setInterpolator(DecelerateInterpolator(1.5f)).start()
+        topBar.animate().alpha(1f).setStartDelay(300).setDuration(320).start()
     }
 
     private var bgRef: Bitmap? = null

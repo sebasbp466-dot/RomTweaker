@@ -58,14 +58,16 @@ class StudioCfg {
     var gap = 10        // separación entre líneas %
     var sig = ""        // firma
     var datef = 0       // formato de fecha
+    var an = 1          // estilo del reloj de agujas (layout analog)
+    var depth = 0       // 1 = sujeto del fondo por delante del reloj
 
-    fun enc(): String = "layout=$layout;wght=$wght;wdth=$wdth;rond=$rond;slnt=$slnt;fx=$fx;tr=$tr;color=$color;size=$size;top=$top;cx=$cx;sc=$sc;date=${if (date) 1 else 0};font=$font;ol=$ol;ic=$ic;c2=$c2;glow=$glow;shadow=$shadow;cmode=$cmode;xs=$xs;gap=$gap;datef=$datef;sig=" + java.net.URLEncoder.encode(sig, "UTF-8")
+    fun enc(): String = "layout=$layout;wght=$wght;wdth=$wdth;rond=$rond;slnt=$slnt;fx=$fx;tr=$tr;color=$color;size=$size;top=$top;cx=$cx;sc=$sc;date=${if (date) 1 else 0};font=$font;ol=$ol;ic=$ic;c2=$c2;glow=$glow;shadow=$shadow;cmode=$cmode;xs=$xs;gap=$gap;datef=$datef;an=$an;depth=$depth;sig=" + java.net.URLEncoder.encode(sig, "UTF-8")
     fun copy(): StudioCfg = parse(enc())
 
     /** Copia solo el estilo (no la posición, escala, firma ni formato de fecha). */
     fun styleFrom(p: StudioCfg) {
         layout = p.layout; wght = p.wght; wdth = p.wdth; rond = p.rond; slnt = p.slnt; fx = p.fx; tr = p.tr; color = p.color
-        size = p.size; font = p.font; ol = p.ol; ic = p.ic; c2 = p.c2; glow = p.glow; shadow = p.shadow; cmode = p.cmode; xs = p.xs; gap = p.gap
+        size = p.size; font = p.font; ol = p.ol; ic = p.ic; c2 = p.c2; glow = p.glow; shadow = p.shadow; cmode = p.cmode; xs = p.xs; gap = p.gap; an = p.an
     }
 
     companion object {
@@ -102,6 +104,8 @@ class StudioCfg {
                         "xs" -> c.xs = v.toInt()
                         "gap" -> c.gap = v.toInt()
                         "datef" -> c.datef = v.toInt()
+                        "an" -> c.an = v.toInt()
+                        "depth" -> c.depth = v.toInt()
                         "sig" -> c.sig = java.net.URLDecoder.decode(v, "UTF-8")
                     }
                 } catch (e: Throwable) { }
@@ -164,13 +168,14 @@ object StudioFont {
 
 object StudioWall {
     private var bmp: Bitmap? = null
+    private var hi: Bitmap? = null
     private var tried = false
+    private var triedHi = false
 
-    fun reset() { bmp = null; tried = false }
+    fun reset() { bmp = null; tried = false; hi = null; triedHi = false }
 
-    fun get(ctx: Context): Bitmap? {
-        if (bmp != null || tried) return bmp
-        tried = true
+    private fun load(ctx: Context, max: Int): Bitmap? {
+        var out: Bitmap? = null
         try {
             val wm = WallpaperManager.getInstance(ctx)
             fun file(which: Int): android.os.ParcelFileDescriptor? = try {
@@ -184,29 +189,43 @@ object StudioWall {
                     o.inJustDecodeBounds = true
                     BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, o)
                     var ss = 1
-                    while (maxOf(o.outWidth, o.outHeight) / ss > 600) ss *= 2
+                    while (maxOf(o.outWidth, o.outHeight) / ss > max) ss *= 2
                     val o2 = BitmapFactory.Options()
                     o2.inSampleSize = ss
-                    bmp = BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, o2)
+                    out = BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, o2)
                 }
             }
-            if (bmp == null) {
+            if (out == null) {
                 val d = wm.drawable
                 if (d != null && d.intrinsicWidth > 0) {
-                    val s = 600f / maxOf(d.intrinsicWidth, d.intrinsicHeight)
+                    val s = max.toFloat() / maxOf(d.intrinsicWidth, d.intrinsicHeight)
                     val w = maxOf(1, (d.intrinsicWidth * s).toInt())
                     val h = maxOf(1, (d.intrinsicHeight * s).toInt())
                     val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                     d.setBounds(0, 0, w, h)
                     d.draw(Canvas(b))
-                    bmp = b
+                    out = b
                 }
             }
         } catch (e: Throwable) { }
+        return out
+    }
+
+    fun get(ctx: Context): Bitmap? {
+        if (bmp != null || tried) return bmp
+        tried = true
+        bmp = load(ctx, 600)
         return bmp
     }
-}
 
+    /** Versión de más resolución (profundidad). */
+    fun hi(ctx: Context): Bitmap? {
+        if (hi != null || triedHi) return hi
+        triedHi = true
+        hi = load(ctx, 1800)
+        return hi
+    }
+}
 
 /** Colores finales del reloj: manual, adaptado al fondo o Material You (colores del sistema). */
 object StudioColor {
@@ -303,6 +322,20 @@ class DigitsView(ctx: Context) : View(ctx) {
     var pad = 0f
         private set
     private var rawW = 0f
+    private var wk = ""
+
+    private fun words(): Array<String> {
+        val cal = Calendar.getInstance()
+        var h = cal.get(Calendar.HOUR_OF_DAY)
+        var m = ((cal.get(Calendar.MINUTE) + 2) / 5) * 5
+        if (m >= 60) { m = 0; h += 1 }
+        if (m > 30) h += 1
+        h %= 12
+        val names = arrayOf("Doce", "Una", "Dos", "Tres", "Cuatro", "Cinco", "Seis", "Siete", "Ocho", "Nueve", "Diez", "Once")
+        val top = if (h == 1) "Es la" else "Son las"
+        val bottom = when (m) { 0 -> "en punto"; 5 -> "y cinco"; 10 -> "y diez"; 15 -> "y cuarto"; 20 -> "y veinte"; 25 -> "y veinticinco"; 30 -> "y media"; 35 -> "menos veinticinco"; 40 -> "menos veinte"; 45 -> "menos cuarto"; 50 -> "menos diez"; else -> "menos cinco" }
+        return arrayOf(top, names[h], bottom)
+    }
 
     companion object {
         const val AGSL = """
@@ -347,7 +380,7 @@ class DigitsView(ctx: Context) : View(ctx) {
 
     private fun px(): Float {
         val d = resources.displayMetrics.density
-        return cfg.size * d * cfg.sc / 100f * (when (cfg.layout) { "stack", "grid", "diag" -> 1f; "col" -> 0.78f; else -> 0.55f })
+        return cfg.size * d * cfg.sc / 100f * (when (cfg.layout) { "stack", "grid", "diag" -> 1f; "col" -> 0.78f; "words" -> 0.5f; else -> 0.55f })
     }
 
     private fun setup(size: Float) {
@@ -382,7 +415,8 @@ class DigitsView(ctx: Context) : View(ctx) {
         if (!android.text.format.DateFormat.is24HourFormat(context)) { hr %= 12; if (hr == 0) hr = 12 }
         val a = String.format("%02d", hr)
         val b = String.format("%02d", cal.get(Calendar.MINUTE))
-        if (a != hh || b != mm) { hh = a; mm = b; requestLayout(); invalidate() }
+        val w = if (cfg.layout == "words") words().joinToString("|") else ""
+        if (a != hh || b != mm || w != wk) { hh = a; mm = b; wk = w; requestLayout(); invalidate() }
     }
 
     init { refresh() }
@@ -401,6 +435,17 @@ class DigitsView(ctx: Context) : View(ctx) {
         val g = cfg.gap / 100f
         var w: Float
         val h: Float
+        if (cfg.layout == "words") {
+            val ws = words()
+            val sm = size * 0.40f
+            p.textSize = sm
+            var mw = maxOf(p.measureText(ws[0]), p.measureText(ws[2]))
+            p.textSize = size
+            mw = maxOf(mw, p.measureText(ws[1]))
+            rawW = mw + 2 * pad
+            setMeasuredDimension((rawW * cfg.xs / 100f).toInt() + 1, (size * 1.45f + 2 * pad).toInt() + 1)
+            return
+        }
         when (cfg.layout) {
             "stack" -> { w = maxOf(p.measureText(hh), p.measureText(mm)); h = capH * (2f + g) }
             "col" -> { w = dw(); h = capH * (4f + 3f * g) }
@@ -433,6 +478,15 @@ class DigitsView(ctx: Context) : View(ctx) {
         val g = cfg.gap / 100f
         val y1 = pad + capH
         when (cfg.layout) {
+            "words" -> {
+                val ws = words()
+                val sz = p.textSize
+                p.textSize = sz * 0.40f
+                c.drawText(ws[0], x, pad + sz * 0.34f, p)
+                c.drawText(ws[2], x, pad + sz * 1.45f, p)
+                p.textSize = sz
+                c.drawText(ws[1], x, pad + sz * 1.06f, p)
+            }
             "stack" -> {
                 c.drawText(hh, x, y1, p)
                 c.drawText(mm, x, y1 + capH * (1f + g), p)
@@ -472,11 +526,204 @@ class DigitsView(ctx: Context) : View(ctx) {
     }
 }
 
+object StudioUnclip {
+    fun all(v: View) {
+        if (v is ViewGroup) { v.clipChildren = false; v.clipToPadding = false; for (i in 0 until v.childCount) all(v.getChildAt(i)) }
+    }
+}
+
+/** Reloj de agujas con 12 estilos. */
+class AnalogView(ctx: Context) : View(ctx) {
+    var cfg = StudioCfg()
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var hr = 0f
+    private var mi = 0f
+    var pad = 0f
+        private set
+
+    private fun dia(): Float = cfg.size * resources.displayMetrics.density * cfg.sc / 100f * 1.15f
+
+    fun refresh() {
+        val c = Calendar.getInstance()
+        val h = c.get(Calendar.HOUR)
+        val m = c.get(Calendar.MINUTE)
+        val a = (h + m / 60f) * 30f
+        val b = m * 6f
+        if (a != hr || b != mi) { hr = a; mi = b; invalidate() }
+    }
+
+    fun inner(): RectF = RectF(pad * 0.5f, pad * 0.5f, width - pad * 0.5f, height - pad * 0.5f)
+
+    override fun onMeasure(ws: Int, hs: Int) {
+        val d = dia()
+        pad = d * (0.06f + cfg.glow / 100f * 0.12f + cfg.shadow / 100f * 0.04f)
+        val t = (d + 2 * pad).toInt() + 1
+        setMeasuredDimension(t, t)
+    }
+
+    private fun pt(cx: Float, cy: Float, a: Float, l: Float): FloatArray {
+        val r = Math.toRadians(a.toDouble())
+        return floatArrayOf(cx + (Math.sin(r) * l).toFloat(), cy - (Math.cos(r) * l).toFloat())
+    }
+
+    private fun line(c: Canvas, cx: Float, cy: Float, a: Float, l0: Float, l1: Float, w: Float) {
+        val s = pt(cx, cy, a, l0)
+        val e = pt(cx, cy, a, l1)
+        p.strokeWidth = w
+        c.drawLine(s[0], s[1], e[0], e[1], p)
+    }
+
+    override fun onDraw(c: Canvas) {
+        val cols = StudioColor.resolve(context, cfg)
+        val c1 = cols.first
+        val c2 = if (cols.second != 0) cols.second else c1
+        val solid = !StudioFx.needs(cfg)
+        val d = dia()
+        val r = d / 2f
+        val cx = width / 2f
+        val cy = height / 2f
+        p.reset()
+        p.isAntiAlias = true
+        p.strokeCap = Paint.Cap.ROUND
+        p.style = Paint.Style.STROKE
+        p.color = c1
+        if (solid) {
+            if (cfg.glow > 0) p.setShadowLayer(r * cfg.glow / 100f * 0.25f + 1f, 0f, 0f, c1)
+            else if (cfg.shadow > 0) { val q = r * cfg.shadow / 100f * 0.08f + 1f; p.setShadowLayer(q, 0f, q * 0.4f, 0x99000000.toInt()) }
+        }
+        val hand = { a: Float, l: Float, w: Float, col: Int, tail: Float -> p.color = col; line(c, cx, cy, a, -tail * r, l * r, w * r) }
+        val dot = { a: Float, rad: Float, sz: Float, col: Int, fill: Boolean ->
+            val q = pt(cx, cy, a, rad * r)
+            p.color = col
+            p.style = if (fill) Paint.Style.FILL else Paint.Style.STROKE
+            p.strokeWidth = r * 0.02f
+            c.drawCircle(q[0], q[1], sz * r, p)
+            p.style = Paint.Style.STROKE
+        }
+        val txt = { s: String, a: Float, rad: Float, sz: Float, tf: Typeface ->
+            val q = pt(cx, cy, a, rad * r)
+            val t = Paint(Paint.ANTI_ALIAS_FLAG)
+            t.color = c1; t.typeface = tf; t.textSize = sz * r; t.textAlign = Paint.Align.CENTER
+            c.drawText(s, q[0], q[1] + t.textSize * 0.35f, t)
+        }
+        when (cfg.an.coerceIn(1, 12)) {
+            1 -> {
+                for (i in 0 until 12) { p.color = c1; line(c, cx, cy, i * 30f, 0.88f * r, (if (i % 3 == 0) 0.72f else 0.8f) * r, r * 0.025f) }
+                hand(hr, 0.5f, 0.055f, c1, 0f); hand(mi, 0.78f, 0.035f, c2, 0f)
+                p.style = Paint.Style.FILL; p.color = c2; c.drawCircle(cx, cy, r * 0.05f, p)
+            }
+            2 -> {
+                p.strokeWidth = r * 0.03f; p.color = c1; c.drawCircle(cx, cy, r * 0.97f, p)
+                for (i in 0 until 4) dot(i * 90f, 0.82f, 0.06f, c1, true)
+                hand(hr, 0.46f, 0.12f, c1, 0f); hand(mi, 0.72f, 0.08f, c2, 0f)
+                p.style = Paint.Style.FILL; p.color = c1; c.drawCircle(cx, cy, r * 0.07f, p)
+            }
+            3 -> {
+                for (i in 0 until 12) dot(i * 30f, 0.88f, if (i % 3 == 0) 0.045f else 0.028f, c1, true)
+                hand(hr, 0.48f, 0.05f, c1, 0.08f); hand(mi, 0.72f, 0.03f, c2, 0.08f)
+                p.style = Paint.Style.FILL; p.color = c2; c.drawCircle(cx, cy, r * 0.045f, p)
+            }
+            4 -> {
+                val tf = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+                txt("XII", 0f, 0.80f, 0.17f, tf); txt("III", 90f, 0.80f, 0.17f, tf); txt("VI", 180f, 0.80f, 0.17f, tf); txt("IX", 270f, 0.80f, 0.17f, tf)
+                for (i in 0 until 12) if (i % 3 != 0) { p.color = c1; line(c, cx, cy, i * 30f, 0.9f * r, 0.84f * r, r * 0.02f) }
+                hand(hr, 0.46f, 0.04f, c1, 0.06f); hand(mi, 0.68f, 0.025f, c2, 0.06f)
+            }
+            5 -> {
+                p.style = Paint.Style.FILL
+                p.color = (c2 and 0x00FFFFFF) or 0x66000000
+                c.drawArc(RectF(cx - r * 0.92f, cy - r * 0.92f, cx + r * 0.92f, cy + r * 0.92f), -90f, mi, true, p)
+                p.color = (c1 and 0x00FFFFFF) or 0x55000000
+                c.drawArc(RectF(cx - r * 0.5f, cy - r * 0.5f, cx + r * 0.5f, cy + r * 0.5f), -90f, hr, true, p)
+                p.style = Paint.Style.STROKE
+                hand(hr, 0.5f, 0.04f, c1, 0f); hand(mi, 0.92f, 0.025f, c2, 0f)
+            }
+            6 -> {
+                p.strokeWidth = r * 0.02f; p.color = c1; c.drawCircle(cx, cy, r * 0.97f, p)
+                hand(hr, 0.4f, 0.03f, c1, 0f); hand(mi, 0.66f, 0.03f, c2, 0f)
+                dot(hr, 0.4f, 0.07f, c1, false); dot(mi, 0.66f + 0.07f, 0.07f, c2, false)
+            }
+            7 -> {
+                hand(hr, 0.34f, 0.06f, c1, 0f); hand(mi, 0.58f, 0.045f, c2, 0f)
+                dot(hr, 0.34f, 0.10f, c1, true); dot(mi, 0.58f, 0.075f, c2, true)
+                p.style = Paint.Style.FILL; p.color = c1; c.drawCircle(cx, cy, r * 0.05f, p)
+            }
+            8 -> {
+                val tf = StudioFont.get()
+                for (i in 1..12) txt(i.toString(), i * 30f, 0.80f, 0.15f, tf)
+                hand(hr, 0.5f, 0.03f, c1, 0.05f); hand(mi, 0.66f, 0.02f, c2, 0.05f)
+            }
+            9 -> {
+                for (i in 0 until 60) { p.color = if (i % 5 == 0) c1 else (c1 and 0x00FFFFFF) or 0x88000000.toInt(); line(c, cx, cy, i * 6f, 0.96f * r, (if (i % 5 == 0) 0.84f else 0.9f) * r, r * (if (i % 5 == 0) 0.03f else 0.015f)) }
+                hand(hr, 0.5f, 0.05f, c1, 0.1f); hand(mi, 0.78f, 0.03f, c2, 0.1f)
+            }
+            10 -> {
+                p.style = Paint.Style.FILL
+                p.shader = LinearGradient(0f, cy - r, 0f, cy + r, c1, c2, Shader.TileMode.CLAMP)
+                c.drawCircle(cx, cy, r * 0.97f, p)
+                p.shader = null
+                p.style = Paint.Style.STROKE
+                val dark = 0xFF14161A.toInt()
+                hand(hr, 0.48f, 0.07f, dark, 0f); hand(mi, 0.78f, 0.045f, dark, 0f)
+                p.style = Paint.Style.FILL; p.color = dark; c.drawCircle(cx, cy, r * 0.055f, p)
+            }
+            11 -> {
+                p.strokeWidth = r * 0.012f
+                p.color = (c1 and 0x00FFFFFF) or 0x66000000
+                c.drawCircle(cx, cy, r * 0.5f, p); c.drawCircle(cx, cy, r * 0.88f, p)
+                dot(hr, 0.5f, 0.10f, c1, true); dot(mi, 0.88f, 0.075f, c2, true)
+            }
+            else -> {
+                for (i in 0 until 4) { p.color = c1; line(c, cx, cy, i * 90f, 0.95f * r, 0.88f * r, r * 0.03f) }
+                hand(hr, 0.55f, 0.03f, c1, 0.22f); hand(mi, 0.95f, 0.018f, c2, 0.26f)
+                p.strokeWidth = r * 0.015f; c.drawCircle(cx, cy, r * 0.05f, p)
+            }
+        }
+    }
+
+    fun applyFx() {
+        val cols = StudioColor.resolve(context, cfg)
+        if (!StudioFx.needs(cfg)) { if (Build.VERSION.SDK_INT >= 31) post { try { setRenderEffect(null) } catch (e: Throwable) { } }; return }
+        StudioFx.apply(this, cfg, cols.first, cols.second)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { super.onSizeChanged(w, h, ow, oh); applyFx() }
+}
+
+/** Sujeto del fondo (recortado) dibujado por encima del reloj. */
+class DepthView(ctx: Context) : View(ctx) {
+    var wall: Bitmap? = null
+    var mask: Bitmap? = null
+    private val p = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val mp = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    init {
+        mp.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN)
+        mp.colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 0f, 2.2f, -153f)))
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = wall ?: return
+        val m = mask ?: return
+        val sc = maxOf(width / w.width.toFloat(), height / w.height.toFloat())
+        val l = c.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+        c.save()
+        c.translate((width - w.width * sc) / 2f, (height - w.height * sc) / 2f)
+        c.scale(sc, sc)
+        c.drawBitmap(w, 0f, 0f, p)
+        c.scale(w.width / m.width.toFloat(), w.height / m.height.toFloat())
+        c.drawBitmap(m, 0f, 0f, mp)
+        c.restore()
+        c.restoreToCount(l)
+    }
+}
+
 /** Reloj completo: fecha encima + dígitos (o reloj de Iconify) + firma. Se usa igual en el editor y dentro de SystemUI. */
 class StudioClock(ctx: Context) : LinearLayout(ctx) {
     private val dateTv = TextView(ctx)
     private val sigTv = TextView(ctx)
     val digits = DigitsView(ctx)
+    val analog = AnalogView(ctx)
     private val holder = FrameLayout(ctx)
     var cfg = StudioCfg()
     private var rcv: BroadcastReceiver? = null
@@ -500,6 +747,8 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         sigTv.typeface = StudioFont.get()
         addView(dateTv, LayoutParams(-2, -2))
         addView(digits, LayoutParams(-2, -2))
+        addView(analog, LayoutParams(-2, -2))
+        analog.visibility = GONE
         addView(holder, LayoutParams(-2, -2))
         addView(sigTv, LayoutParams(-2, -2))
         holder.visibility = GONE
@@ -554,6 +803,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
             if (id == 0) return
             val v = android.view.LayoutInflater.from(pkg).inflate(id, null)
             if (c.ic != 10) titleAll(v)
+            StudioUnclip.all(v)
             holder.addView(v, FrameLayout.LayoutParams(-2, -2))
         } catch (e: Throwable) { try { android.util.Log.w("RomTweaker", "ic: holder $e") } catch (x: Throwable) { } }
     }
@@ -563,7 +813,10 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         digits.cfg = c
         val cols = StudioColor.resolve(context, c)
         val ic = c.ic > 0
-        digits.visibility = if (ic) GONE else VISIBLE
+        val an = !ic && c.layout == "analog"
+        analog.cfg = c
+        digits.visibility = if (ic || an) GONE else VISIBLE
+        analog.visibility = if (an) VISIBLE else GONE
         holder.visibility = if (ic) VISIBLE else GONE
         dateTv.visibility = if (c.date && !ic) VISIBLE else GONE
         dateTv.setTextColor(cols.first)
@@ -582,6 +835,11 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
             holder.scaleY = k
             if (c.cmode != 5 && holder.childCount > 0) tintAll(holder, cols.first, c.glow / 100f * 18f * resources.displayMetrics.density)
             StudioFx.apply(holder, c, cols.first, cols.second)
+        } else if (an) {
+            analog.refresh()
+            analog.requestLayout()
+            analog.invalidate()
+            analog.applyFx()
         } else {
             digits.refresh()
             digits.requestLayout()
@@ -611,6 +869,9 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
             val k = holder.scaleX
             r.set(holder.left + holder.width * (1 - k) / 2f, holder.top.toFloat(), holder.right - holder.width * (1 - k) / 2f, holder.top + holder.height * k)
             r.inset(-6 * d, -6 * d)
+        } else if (analog.visibility == VISIBLE) {
+            val i = analog.inner()
+            r.set(analog.left + i.left, analog.top + i.top, analog.left + i.right, analog.top + i.bottom)
         } else {
             val i = digits.inner()
             r.set(digits.left + i.left, digits.top + i.top, digits.left + i.right, digits.top + i.bottom)
@@ -648,7 +909,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         val r = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, i: Intent?) { refreshDate(); digits.refresh() }
+            override fun onReceive(c: Context?, i: Intent?) { refreshDate(); digits.refresh(); analog.refresh() }
         }
         rcv = r
         val f = IntentFilter()
@@ -657,7 +918,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED)
         try { context.registerReceiver(r, f) } catch (e: Throwable) { }
         refreshDate()
-        if (cfg.ic > 0) applyConfig(cfg) else { digits.refresh(); digits.applyFx() }
+        if (cfg.ic > 0 || cfg.layout == "analog") applyConfig(cfg) else { digits.refresh(); digits.applyFx() }
     }
 
     override fun onDetachedFromWindow() {

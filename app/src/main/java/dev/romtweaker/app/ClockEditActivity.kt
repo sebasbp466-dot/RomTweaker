@@ -127,6 +127,16 @@ class ClockEditActivity : Activity() {
 
         clock = StudioClock(this)
         clock.edit = true
+        depthMask = getSharedPreferences("lock", MODE_PRIVATE).getString("depth_mask", "") ?: ""
+        if (cfg.depth == 1) {
+            val mk = StudioDepth.decode(depthMask)
+            if (mk == null) cfg.depth = 0
+            else Thread {
+                val wb = StudioWall.hi(this)
+                val fg = if (wb != null) StudioDepth.compose(wb, mk) else null
+                runOnUiThread { if (fg != null) { depthFg = fg; showDepth(true) } else cfg.depth = 0 }
+            }.start()
+        }
         baseTop = cfg.top
         stage.addView(clock, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         clock.applyConfig(cfg)
@@ -182,8 +192,8 @@ class ClockEditActivity : Activity() {
             bottomBar.addView(it1, LinearLayout.LayoutParams(0, -2, 1f))
         }
         bbtn(0, "Fondo") { openPanel(3) }
-        bbtn(1, "IA") { Toast.makeText(this, "IA: próximamente (necesita la API de Gemini)", Toast.LENGTH_SHORT).show() }
-        bbtn(2, "Profundidad") { Toast.makeText(this, "Profundidad: próximamente (sujeto delante del reloj)", Toast.LENGTH_SHORT).show() }
+        bbtn(1, "IA") { aiDialog() }
+        bbtn(2, "Profundidad") { toggleDepth() }
         bbtn(3, "Efectos") { openPanel(1) }
         val bl = FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM)
         bl.setMargins(dp(22f), 0, dp(22f), dp(26f))
@@ -331,12 +341,14 @@ class ClockEditActivity : Activity() {
 
     private fun cycleLayout() {
         val ic = cfg.ic > 0
-        val v: View = if (ic) clock else clock.digits
+        val an = !ic && cfg.layout == "analog"
+        val v: View = if (ic) clock else if (an) clock.analog else clock.digits
         v.animate().cancel()
         v.animate().alpha(0f).setDuration(170).withEndAction {
             if (ic) cfg.ic = if (cfg.ic >= IcClocks.COUNT) 1 else cfg.ic + 1
+            else if (an) cfg.an = cfg.an % 12 + 1
             else {
-                val order = listOf("stack", "inline", "col", "grid", "diag")
+                val order = listOf("stack", "inline", "col", "grid", "diag", "words")
                 cfg.layout = order[(order.indexOf(cfg.layout) + 1) % order.size]
             }
             clock.applyConfig(cfg)
@@ -365,7 +377,7 @@ class ClockEditActivity : Activity() {
         val loc = IntArray(2)
         clock.getLocationOnScreen(loc)
         val s = stage.scaleX * clock.scaleX
-        val pad = dp(26f)
+        val pad = dp(60f)
         return rx >= loc[0] - pad && rx <= loc[0] + clock.width * s + pad && ry >= loc[1] - pad && ry <= loc[1] + clock.height * s + pad
     }
 
@@ -424,7 +436,7 @@ class ClockEditActivity : Activity() {
                 if (e.actionMasked == MotionEvent.ACTION_MOVE) {
                     val slop = ViewConfiguration.get(this).scaledTouchSlop
                     if (!moved && (abs(e.rawX - downX) > slop || abs(e.rawY - downY) > slop || n >= 2)) moved = true
-                    if (n >= 2 || (inClock && moved)) {
+                    if (n >= 2 || moved) {
                         if (!grabbed) grab(true)
                         tapKind = 0
                         val dm = resources.displayMetrics
@@ -576,7 +588,7 @@ class ClockEditActivity : Activity() {
     }
 
     private fun applyPreset(p: StudioCfg) {
-        val tgt = if (cfg.ic > 0 || p.ic > 0) clock else clock.digits
+        val tgt: View = if (cfg.ic > 0 || p.ic > 0) clock else if (cfg.layout == "analog" || p.layout == "analog") clock.analog else clock.digits
         cfg.styleFrom(p)
         clock.applyConfig(cfg)
         sg.x = 0.9f; sg.t = 1f; sg.v += 3f; kick()
@@ -872,6 +884,7 @@ class ClockEditActivity : Activity() {
 
     private fun selectBg(idx: Int) {
         bgSel = idx
+        if (cfg.depth == 1) { cfg.depth = 0; showDepth(false) }
         when {
             idx in 0 until StudioBg.count -> wallIv.setImageBitmap(StudioBg.gen(idx, sw / 2, sh / 2))
             idx == 100 && customBg != null -> wallIv.setImageBitmap(customBg)
@@ -959,6 +972,108 @@ class ClockEditActivity : Activity() {
         } catch (e: Throwable) { Toast.makeText(this, "No se pudo leer la imagen", Toast.LENGTH_SHORT).show() }
     }
 
+    // ---------- Profundidad (sujeto delante del reloj) ----------
+
+    private var depthIv: ImageView? = null
+    private var depthFg: Bitmap? = null
+    private var depthMask = ""
+    private var depthBusy = false
+
+    private fun curWallBitmap(): Bitmap? = when {
+        bgSel in 0 until StudioBg.count -> StudioBg.gen(bgSel, 540, 1170)
+        bgSel == 100 && customBg != null -> customBg
+        else -> StudioWall.hi(this)
+    }
+
+    private fun showDepth(on: Boolean) {
+        depthIv?.let { stage.removeView(it) }
+        depthIv = null
+        val fg = depthFg
+        if (on && fg != null) {
+            val iv = ImageView(this)
+            iv.scaleType = ImageView.ScaleType.CENTER_CROP
+            iv.setImageBitmap(fg)
+            iv.colorFilter = android.graphics.PorterDuffColorFilter(0x26000000, android.graphics.PorterDuff.Mode.SRC_ATOP)
+            stage.addView(iv, stage.indexOfChild(clock) + 1, FrameLayout.LayoutParams(-1, -1))
+            depthIv = iv
+        }
+    }
+
+    private fun toggleDepth() {
+        if (depthBusy) return
+        if (cfg.depth == 1) {
+            cfg.depth = 0
+            showDepth(false)
+            Toast.makeText(this, "Profundidad desactivada", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val src = curWallBitmap()
+        if (src == null) { Toast.makeText(this, "No encuentro el fondo", Toast.LENGTH_SHORT).show(); return }
+        depthBusy = true
+        Toast.makeText(this, "Buscando el sujeto del fondo… (la primera vez descarga el modelo de Google)", Toast.LENGTH_LONG).show()
+        Thread {
+            val r = StudioDepth.segment(src)
+            val enc = if (r.first != null) StudioDepth.encode(r.first!!) else ""
+            runOnUiThread {
+                depthBusy = false
+                if (r.first == null) { Toast.makeText(this, "Profundidad: " + r.second, Toast.LENGTH_LONG).show(); return@runOnUiThread }
+                depthFg = r.first
+                depthMask = enc
+                cfg.depth = 1
+                showDepth(true)
+                Toast.makeText(this, "Profundidad activada: el sujeto va delante del reloj", Toast.LENGTH_SHORT).show()
+            }
+        }.start()
+    }
+
+    // ---------- IA (Gemini) ----------
+
+    private fun aiDialog() {
+        val p = getSharedPreferences("lock", MODE_PRIVATE)
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(20f), dp(8f), dp(20f), 0)
+        val key = android.widget.EditText(this)
+        key.hint = "Clave API de Gemini (aistudio.google.com)"
+        key.setText(p.getString("gem_key", ""))
+        key.setSingleLine(true)
+        val pr = android.widget.EditText(this)
+        pr.hint = "Describe el reloj o el fondo (ej: reloj dorado elegante con serif)"
+        col.addView(key)
+        col.addView(pr)
+        val d = android.app.AlertDialog.Builder(this).setTitle("IA con Gemini").setView(col)
+            .setPositiveButton("Crear reloj") { _, _ -> aiRun(key.text.toString().trim(), pr.text.toString().trim(), false) }
+            .setNeutralButton("Crear fondo") { _, _ -> aiRun(key.text.toString().trim(), pr.text.toString().trim(), true) }
+            .setNegativeButton("Cancelar", null).create()
+        d.show()
+    }
+
+    private fun aiRun(key: String, prompt: String, wall: Boolean) {
+        if (key.isEmpty() || prompt.isEmpty()) { Toast.makeText(this, "Falta la clave o la descripción", Toast.LENGTH_SHORT).show(); return }
+        getSharedPreferences("lock", MODE_PRIVATE).edit().putString("gem_key", key).apply()
+        Toast.makeText(this, "Gemini trabajando…", Toast.LENGTH_SHORT).show()
+        Thread {
+            if (wall) {
+                val r = StudioAI.wallpaper(key, prompt)
+                runOnUiThread {
+                    if (r.first == null) Toast.makeText(this, "Gemini: " + r.second, Toast.LENGTH_LONG).show()
+                    else { customBg = r.first; if (cfg.depth == 1) { cfg.depth = 0; showDepth(false) }; selectBg(100) }
+                }
+            } else {
+                val r = StudioAI.clockStyle(key, prompt)
+                runOnUiThread {
+                    if (r.first == null) Toast.makeText(this, "Gemini: " + r.second, Toast.LENGTH_LONG).show()
+                    else {
+                        StudioAI.applyJson(cfg, r.first!!)
+                        clock.applyConfig(cfg)
+                        sg.x = 0.88f; sg.t = 1f; sg.v += 3f; kick()
+                        Toast.makeText(this, "Listo. Ajusta lo que quieras", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }.start()
+    }
+
     // ---------- Salir / Aplicar ----------
 
     private fun cancel() {
@@ -972,7 +1087,7 @@ class ClockEditActivity : Activity() {
         if (closing) return
         closing = true
         val p = getSharedPreferences("lock", MODE_PRIVATE)
-        p.edit().putString("sc_cfg", cfg.enc()).putBoolean("sc_on", true).putBoolean("ic_on", false).apply()
+        p.edit().putString("sc_cfg", cfg.enc()).putBoolean("sc_on", true).putBoolean("ic_on", false).putString("depth_mask", if (cfg.depth == 1) depthMask else "").apply()
         val sel = bgSel
         val cb = customBg
         Thread {
@@ -1008,6 +1123,7 @@ object StudioPush {
         var ok = bridge("putString", "sc_cfg", p.getString("sc_cfg", "") ?: "")
         ok = bridge("putBool", "sc_on", p.getBoolean("sc_on", false)) && ok
         ok = bridge("putBool", "ic_on", p.getBoolean("ic_on", false)) && ok
+        ok = bridge("putString", "depth_mask", p.getString("depth_mask", "") ?: "") && ok
         return ok
     }
 

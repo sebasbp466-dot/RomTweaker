@@ -34,6 +34,7 @@ object IcModule {
     private var errs = 0
     private val stock = java.util.WeakHashMap<View, Boolean>()
     private var mirroring = false
+    private var depthRef: WeakReference<View>? = null
 
     private fun find(c0: Class<*>?, name: String): java.lang.reflect.Method? {
         var c = c0
@@ -56,7 +57,8 @@ object IcModule {
             val app = Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as android.app.Application
             val i = android.content.Intent().setClassName("dev.romtweaker.app", "dev.romtweaker.app.LockGalleryActivity")
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            app.startActivity(i)
+            val opt = android.app.ActivityOptions.makeCustomAnimation(app, 0, 0).toBundle()
+            app.startActivity(i, opt)
             x.log(Log.INFO, TAG, "lp: galería lanzada")
             true
         } catch (e: Throwable) {
@@ -117,9 +119,12 @@ object IcModule {
             val r = Runnable {
                 lpRun = null
                 v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                launchGallery(x)
                 val k = lpKg
-                if (k != null) k.postDelayed({ k.animate().scaleX(1f).scaleY(1f).setDuration(220).start() }, 900)
+                // el bloqueo se "minimiza" mientras aparece la galería
+                k?.animate()?.cancel()
+                k?.animate()?.scaleX(0.80f)?.scaleY(0.80f)?.alpha(0f)?.setDuration(330)?.setInterpolator(android.view.animation.DecelerateInterpolator(1.6f))?.start()
+                launchGallery(x)
+                if (k != null) k.postDelayed({ k.animate().cancel(); k.scaleX = 1f; k.scaleY = 1f; k.alpha = 1f }, 1100)
             }
             lpRun = r
             v.postDelayed(r, 650)
@@ -233,6 +238,7 @@ object IcModule {
         if (!on && !sc) {
             if (cur != null) {
                 cont = null; contKey = ""
+                depthRef?.get()?.let { dv -> v.post { try { (dv.parent as? ViewGroup)?.removeView(dv) } catch (e: Throwable) { } } }; depthRef = null
                 v.post { try { val r = cur.parent as? ViewGroup; r?.removeView(cur); r?.let { hideDate(it, false); it.requestLayout() } } catch (e: Throwable) { } }
             }
             return false
@@ -244,7 +250,9 @@ object IcModule {
         val scl = gi("ic_scale", 100)
         val hd = prefs?.getBoolean("ic_date", true) ?: true
         val scCfg = if (sc) (prefs?.getString("sc_cfg", "") ?: "") else ""
-        val key = if (sc) "S|$scCfg" else "$n|$top|$bot|$scl|$hd"
+        val dmask = if (sc) (prefs?.getString("depth_mask", "") ?: "") else ""
+        val wid = try { android.app.WallpaperManager.getInstance(v.context).getWallpaperId(android.app.WallpaperManager.FLAG_LOCK) } catch (e: Throwable) { 0 }
+        val key = if (sc) "S|$scCfg|${dmask.length}|$wid" else "$n|$top|$bot|$scl|$hd"
         val rr = root(v)
         val healthy = cur != null && cur.isAttachedToWindow && key == contKey && cur.parent === rr && cur.childCount > 0 && cur.visibility == View.VISIBLE &&
             (cur.width > 0 || !cur.isLaidOut) && (cur.getChildAt(0)?.let { it.width > 0 || !it.isLaidOut } ?: false)
@@ -259,7 +267,7 @@ object IcModule {
         val r = root(v) ?: return false
         building = true
         v.post {
-            try { build(x, r, cur, n, top, bot, scl, if (sc) true else hd, key, if (sc) scCfg else null) }
+            try { build(x, r, cur, n, top, bot, scl, if (sc) true else hd, key, if (sc) scCfg else null, dmask) }
             catch (e: Throwable) { contKey = ""; hideDate(r, false); x.log(Log.WARN, TAG, "ic: build " + Log.getStackTraceString(e)) }
             finally { building = false }
             v.invalidate()
@@ -294,10 +302,12 @@ object IcModule {
                     if (best >= 0f) {
                         idle = 0
                         if (cc.alpha != best) cc.alpha = best
+                        depthRef?.get()?.let { dv -> if (dv.alpha != best) dv.alpha = best }
                         if (cc.translationY != bty) cc.translationY = bty
                     } else if (++idle > 20) {
                         // sin reloj de serie visible: nunca dejar el nuestro invisible por un valor viejo
                         if (cc.alpha != 1f) cc.alpha = 1f
+                        depthRef?.get()?.alpha = 1f
                         if (cc.translationY != 0f) cc.translationY = 0f
                         idle = 0
                     }
@@ -337,7 +347,7 @@ object IcModule {
         if (v is ViewGroup) for (i in 0 until v.childCount) scaleText(v.getChildAt(i), f)
     }
 
-    private fun build(x: XposedModule, r: ViewGroup, cur: FrameLayout?, n: Int, top: Int, bot: Int, sc: Int, hd: Boolean, key: String, studio: String?) {
+    private fun build(x: XposedModule, r: ViewGroup, cur: FrameLayout?, n: Int, top: Int, bot: Int, sc: Int, hd: Boolean, key: String, studio: String?, dmask: String = "") {
         val ctx = r.context
         val d = ctx.resources.displayMetrics.density
         val inflated: View
@@ -379,6 +389,9 @@ object IcModule {
             c.layoutParams = lp
             r.addView(c)
         }
+        dev.romtweaker.app.StudioUnclip.all(inflated)
+        c.clipChildren = false
+        c.clipToPadding = false
         c.addView(inflated, ml)
         cont = WeakReference(c)
         rootRef = WeakReference(r)
@@ -386,6 +399,32 @@ object IcModule {
         hideDate(r, hd)
         try { anchor(r, c.id) } catch (e: Throwable) { x.log(Log.WARN, TAG, "ic: ancla " + e) }
         x.log(Log.INFO, TAG, "ic: reloj " + (if (studio != null) "estudio" else n.toString()) + " top=$top bottom=$bot escala=$sc")
+        // profundidad: sujeto del fondo por delante del reloj
+        try {
+            depthRef?.get()?.let { dv -> (dv.parent as? ViewGroup)?.removeView(dv) }
+            depthRef = null
+            val cfg2 = if (studio != null) dev.romtweaker.app.StudioCfg.parse(studio) else null
+            if (cfg2 != null && cfg2.depth == 1 && dmask.isNotEmpty()) {
+                dev.romtweaker.app.StudioWall.reset()
+                val mk = dev.romtweaker.app.StudioDepth.decode(dmask)
+                val wb = dev.romtweaker.app.StudioWall.hi(ctx)
+                if (mk != null && wb != null) {
+                    val dv = dev.romtweaker.app.DepthView(ctx)
+                    dv.wall = wb; dv.mask = mk
+                    dv.id = View.generateViewId()
+                    var lp: ViewGroup.LayoutParams
+                    try {
+                        val k = Class.forName("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams", false, r.javaClass.classLoader)
+                        lp = k.getConstructor(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).newInstance(-1, -1) as ViewGroup.LayoutParams
+                        for (f in listOf("topToTop", "bottomToBottom", "startToStart", "endToEnd")) k.getField(f).setInt(lp, 0)
+                    } catch (e: Throwable) { lp = FrameLayout.LayoutParams(-1, -1) }
+                    dv.layoutParams = lp
+                    r.addView(dv)
+                    depthRef = WeakReference(dv)
+                    x.log(Log.INFO, TAG, "ic: profundidad activa")
+                } else x.log(Log.WARN, TAG, "ic: profundidad sin máscara o fondo")
+            }
+        } catch (e: Throwable) { x.log(Log.WARN, TAG, "ic: profundidad " + e) }
         startMirror(c)
     }
 
