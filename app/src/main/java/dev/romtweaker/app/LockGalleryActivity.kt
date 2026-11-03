@@ -39,32 +39,73 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Estilos de reloj predefinidos (propios, inspirados en la galería de HyperOS). */
+/** Estilos de reloj predefinidos (propios, inspirados en la galería de HyperOS y en Iconify). */
 object StudioPresets {
     class P(val name: String, val cat: String, val cfg: StudioCfg)
 
-    val cats = listOf("Clásicos", "Cristal", "Color", "Mezcla", "Vertical", "Revista", "Contorno")
+    private const val W = 0xFFFFFFFF.toInt()
+    val icPages = 5
+    val cats: List<String> = listOf("Centrados", "Clásicos", "Cristal", "Revista", "Material You", "Neón", "Color", "Mezcla", "Vertical", "Contorno") + (0 until icPages).map { "Iconify ${it * 12 + 1}–${it * 12 + 12}" }
 
-    private fun mk(name: String, cat: String, layout: String, w: Int, wd: Int, ro: Int, fx: String, tr: Int, color: Int, size: Int, font: String = "flex", ol: Int = 0): P {
+    private fun st(name: String, cat: String, f: StudioCfg.() -> Unit): P {
         val c = StudioCfg()
-        c.layout = layout; c.wght = w; c.wdth = wd; c.rond = ro; c.fx = fx; c.tr = tr; c.color = color; c.size = size; c.font = font; c.ol = ol
+        c.f()
         return P(name, cat, c)
     }
 
-    private const val W = 0xFFFFFFFF.toInt()
-    val all: List<P> = listOf(
+    private fun mk(name: String, cat: String, layout: String, w: Int, wd: Int, ro: Int, fx: String, tr: Int, color: Int, size: Int, font: String = "flex", ol: Int = 0): P =
+        st(name, cat) { this.layout = layout; wght = w; wdth = wd; rond = ro; this.fx = fx; this.tr = tr; this.color = color; this.size = size; this.font = font; this.ol = ol }
+
+    private val base: List<P> = listOf(
+        // Centrados al estilo Xiaomi: alto y fino, pesado condensado, Didone, escalonado...
+        st("Alto fino", "Centrados") { layout = "stack"; wght = 160; wdth = 35; fx = "solid"; size = 235 },
+        st("Pesado condensado", "Centrados") { layout = "stack"; wght = 900; wdth = 35; fx = "solid"; size = 225 },
+        st("Alto cristal", "Centrados") { layout = "stack"; wght = 200; wdth = 35; fx = "glass"; tr = 30; size = 235 },
+        st("Línea alta", "Centrados") { layout = "inline"; wght = 300; wdth = 35; fx = "solid"; size = 420; gap = 6 },
+        st("Línea cálida", "Centrados") { layout = "inline"; font = "antonio"; wght = 500; fx = "solid"; size = 360; color = 0xFFFFD9A0.toInt(); c2 = 0xFFFF7A3D.toInt() },
+        st("Didone", "Centrados") { layout = "stack"; font = "bodoni"; wght = 500; fx = "overlay"; tr = 20; size = 200 },
+        st("Didone cristal", "Centrados") { layout = "stack"; font = "bodoni"; wght = 400; fx = "glass"; tr = 35; size = 200 },
+        st("Escalonado", "Centrados") { layout = "grid"; font = "italiana"; fx = "solid"; size = 220; gap = 14; color = 0xFFFFE6E6.toInt() },
+        st("Diagonal", "Centrados") { layout = "diag"; wght = 300; wdth = 60; fx = "solid"; size = 190 },
+        st("Anton", "Centrados") { layout = "stack"; font = "anton"; fx = "solid"; size = 205; gap = 6 },
+        st("Estrecho", "Centrados") { layout = "stack"; font = "bigshoulders"; wght = 800; fx = "solid"; size = 225 },
+        st("Bebas", "Centrados") { layout = "inline"; font = "bebas"; fx = "solid"; size = 400 },
+
         mk("Grueso", "Clásicos", "stack", 800, 100, 0, "solid", 0, W, 190),
         mk("Fino alto", "Clásicos", "stack", 200, 50, 0, "solid", 0, W, 215),
         mk("Condensado", "Clásicos", "stack", 500, 50, 0, "solid", 0, W, 200),
         mk("En línea", "Clásicos", "inline", 500, 90, 0, "solid", 0, W, 230),
         mk("Ancho", "Clásicos", "stack", 500, 140, 0, "solid", 0, W, 170),
         mk("Redondo", "Clásicos", "stack", 600, 100, 100, "solid", 0, W, 190),
+        mk("Cuadrícula", "Clásicos", "grid", 600, 80, 40, "solid", 0, W, 200),
 
         mk("Cristal", "Cristal", "stack", 600, 90, 0, "glass", 35, W, 190),
         mk("Cristal fino", "Cristal", "stack", 150, 70, 0, "glass", 20, W, 210),
         mk("Líquido", "Cristal", "stack", 700, 110, 100, "glass", 50, W, 180),
         mk("Cristal ancho", "Cristal", "stack", 500, 130, 40, "glass", 40, W, 175),
         mk("Hielo", "Cristal", "stack", 300, 80, 0, "glass", 60, 0xFFBFE9FF.toInt(), 200),
+        mk("Cristal línea", "Cristal", "inline", 400, 70, 60, "glass", 40, W, 330),
+
+        st("Serif", "Revista") { layout = "stack"; font = "serif"; wght = 400; fx = "solid"; size = 190 },
+        st("Serif fino", "Revista") { layout = "stack"; font = "serif"; wght = 300; fx = "solid"; size = 205 },
+        st("Serif en línea", "Revista") { layout = "inline"; font = "serif"; wght = 500; fx = "solid"; size = 230 },
+        st("Doodle", "Revista") { layout = "stack"; font = "caveat"; wght = 700; fx = "solid"; size = 220; color = 0xFFFFF3A3.toInt() },
+        st("Editorial", "Revista") { layout = "stack"; font = "dmserif"; fx = "solid"; size = 190 },
+        st("Syne", "Revista") { layout = "stack"; font = "syne"; wght = 800; fx = "solid"; size = 175 },
+        mk("Mono", "Revista", "stack", 500, 100, 0, "solid", 0, W, 170, "mono"),
+
+        st("Material", "Material You") { layout = "stack"; wght = 650; rond = 100; fx = "solid"; size = 190; cmode = 2 },
+        st("Material dúo", "Material You") { layout = "stack"; wght = 800; rond = 60; fx = "solid"; size = 190; cmode = 3 },
+        st("Material línea", "Material You") { layout = "inline"; wght = 500; rond = 100; fx = "solid"; size = 240; cmode = 2 },
+        st("Material cristal", "Material You") { layout = "stack"; wght = 600; rond = 100; fx = "glass"; tr = 30; size = 190; cmode = 2 },
+        st("Adaptado", "Material You") { layout = "stack"; wght = 700; fx = "solid"; size = 190; cmode = 1 },
+        st("Adaptado fino", "Material You") { layout = "stack"; wght = 200; wdth = 60; fx = "solid"; size = 215; cmode = 1; c2 = 1 },
+
+        st("Neón verde", "Neón") { layout = "stack"; wght = 400; wdth = 60; rond = 100; fx = "solid"; size = 200; color = 0xFF4ADE80.toInt(); glow = 60 },
+        st("Neón rosa", "Neón") { layout = "stack"; wght = 600; rond = 60; fx = "solid"; size = 190; color = 0xFFFF5C9E.toInt(); glow = 70 },
+        st("Neón azul", "Neón") { layout = "inline"; wght = 400; fx = "solid"; size = 240; color = 0xFF4DA3FF.toInt(); glow = 60 },
+        st("Resplandor", "Neón") { layout = "stack"; font = "antonio"; wght = 400; fx = "solid"; size = 220; color = 0xFFFFE08A.toInt(); glow = 45 },
+        st("Sombra", "Neón") { layout = "stack"; wght = 800; fx = "solid"; size = 190; shadow = 70 },
 
         mk("Naranja", "Color", "stack", 800, 100, 0, "solid", 0, 0xFFFF7A3D.toInt(), 190),
         mk("Neón", "Color", "stack", 400, 60, 100, "solid", 0, 0xFF4ADE80.toInt(), 200),
@@ -72,29 +113,35 @@ object StudioPresets {
         mk("Violeta", "Color", "stack", 700, 100, 60, "solid", 0, 0xFFB388FF.toInt(), 190),
         mk("Dorado", "Color", "stack", 300, 70, 0, "solid", 0, 0xFFFFD60A.toInt(), 205),
         mk("Menta", "Color", "inline", 600, 90, 100, "solid", 0, 0xFF4ADE80.toInt(), 230),
+        st("Atardecer", "Color") { layout = "stack"; wght = 800; fx = "solid"; size = 190; color = 0xFFFFD36B.toInt(); c2 = 0xFFFF4E8A.toInt() },
 
         mk("Mezcla", "Mezcla", "stack", 800, 100, 0, "blend", 20, W, 190),
         mk("Mezcla fina", "Mezcla", "stack", 300, 70, 0, "blend", 10, W, 210),
         mk("Superposición", "Mezcla", "stack", 700, 100, 0, "overlay", 20, W, 190),
         mk("Superpos. fina", "Mezcla", "stack", 300, 70, 0, "overlay", 30, W, 210),
+        st("Mezcla alta", "Mezcla") { layout = "stack"; wght = 400; wdth = 35; fx = "blend"; tr = 10; size = 235 },
 
         mk("Vertical fino", "Vertical", "col", 200, 60, 0, "solid", 0, W, 200),
         mk("Vertical grueso", "Vertical", "col", 800, 90, 0, "solid", 0, W, 200),
         mk("Vertical cristal", "Vertical", "col", 500, 80, 0, "glass", 35, W, 200),
         mk("Vertical color", "Vertical", "col", 700, 70, 60, "solid", 0, 0xFFFF7A3D.toInt(), 200),
-
-        mk("Serif", "Revista", "stack", 400, 100, 0, "solid", 0, W, 190, "serif"),
-        mk("Serif fino", "Revista", "stack", 300, 100, 0, "solid", 0, W, 205, "serif"),
-        mk("Serif en línea", "Revista", "inline", 500, 100, 0, "solid", 0, W, 230, "serif"),
-        mk("Mono", "Revista", "stack", 500, 100, 0, "solid", 0, W, 170, "mono"),
+        st("Vertical serif", "Vertical") { layout = "col"; font = "bodoni"; fx = "solid"; size = 190 },
 
         mk("Contorno", "Contorno", "stack", 500, 90, 0, "solid", 0, W, 190, "flex", 1),
         mk("Contorno fino", "Contorno", "stack", 300, 70, 0, "solid", 0, W, 210, "flex", 1),
-        mk("Contorno vertical", "Contorno", "col", 400, 70, 0, "solid", 0, W, 200, "flex", 1)
+        mk("Contorno vertical", "Contorno", "col", 400, 70, 0, "solid", 0, W, 200, "flex", 1),
+        st("Contorno serif", "Contorno") { layout = "stack"; font = "bodoni"; fx = "solid"; ol = 1; size = 200 },
+        st("Contorno línea", "Contorno") { layout = "inline"; wght = 300; wdth = 50; fx = "solid"; ol = 1; size = 360 }
     )
 
+    private val icons: List<P> = (1..IcClocks.COUNT).map { n ->
+        st("Iconify $n", "Iconify ${((n - 1) / 12) * 12 + 1}–${((n - 1) / 12) * 12 + 12}") { ic = n; cmode = 5; fx = "solid"; top = 100f; size = 170 }
+    }
+
+    val all: List<P> = base + icons
+
     fun same(a: StudioCfg, b: StudioCfg) = a.layout == b.layout && a.wght == b.wght && a.wdth == b.wdth && a.rond == b.rond &&
-        a.fx == b.fx && a.font == b.font && a.ol == b.ol && a.color == b.color
+        a.fx == b.fx && a.font == b.font && a.ol == b.ol && a.color == b.color && a.ic == b.ic && a.cmode == b.cmode && a.c2 == b.c2 && a.xs == b.xs
 }
 
 /** Fondos generados (propios) y utilidades para poner un fondo en la pantalla de bloqueo. */
@@ -132,6 +179,7 @@ object StudioBg {
 /** Utilidades visuales comunes del estilo HyperOS (botones tipo píldora, animaciones de pulsación). */
 object Hx {
     const val BLUE = 0xFF3D8BFF.toInt()
+    const val CARD = 0.72f
 
     fun dp(ctx: Context, v: Float): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
 
@@ -284,7 +332,7 @@ class LockGalleryActivity : Activity() {
     private var lastIdx = -1
 
     private fun cur(): Int = vpos.roundToInt().coerceIn(0, pages.size - 1)
-    private fun idx(pg: Page): Int = pg.pos.roundToInt().coerceIn(0, pg.items.size - 1)
+    private fun idx(pg: Page): Int = Math.floorMod(pg.pos.roundToInt(), pg.items.size)
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -297,11 +345,11 @@ class LockGalleryActivity : Activity() {
         val dm = resources.displayMetrics
         sw = dm.widthPixels
         sh = dm.heightPixels
-        pw = (sw * 0.60f).toInt()
+        pw = (sw * 0.54f).toInt()
         ph = (pw * sh / sw.toFloat()).toInt()
         cy = sh * 0.52f
-        vstep = ph * 1.10f
-        hstep = pw * 0.92f
+        vstep = sh * 0.64f
+        hstep = pw * 0.93f
 
         root = FrameLayout(this)
         root.setBackgroundColor(0xFF0A0B0F.toInt())
@@ -321,7 +369,7 @@ class LockGalleryActivity : Activity() {
             t.typeface = Typeface.DEFAULT_BOLD
             t.gravity = Gravity.CENTER
             val tlp = FrameLayout.LayoutParams(-1, -2, Gravity.TOP)
-            tlp.topMargin = (sh * 0.125f).toInt()
+            tlp.topMargin = (sh * 0.165f).toInt()
             v.addView(t, tlp)
             stage.addView(v, FrameLayout.LayoutParams(-1, -1))
             pages.add(Page(c, items, v, t))
@@ -333,14 +381,14 @@ class LockGalleryActivity : Activity() {
         nameTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         nameTv.gravity = Gravity.CENTER
         val nlp = FrameLayout.LayoutParams(-1, -2, Gravity.TOP)
-        nlp.topMargin = (cy + ph / 2f + Hx.dp(this, 10f)).toInt()
+        nlp.topMargin = (cy + ph / 2f + Hx.dp(this, 6f)).toInt()
         root.addView(nameTv, nlp)
 
         custBtn = Hx.pill(this, "Personalizar", 0x33FFFFFF, Color.WHITE) { openEditor() }
         custBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         custBtn.setPadding(Hx.dp(this, 14f), Hx.dp(this, 6f), Hx.dp(this, 14f), Hx.dp(this, 6f))
         val clp = FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
-        clp.topMargin = (cy + ph / 2f + Hx.dp(this, 34f)).toInt()
+        clp.topMargin = (cy + ph / 2f - Hx.dp(this, 46f)).toInt()
         root.addView(custBtn, clp)
 
         topBar = FrameLayout(this)
@@ -354,11 +402,15 @@ class LockGalleryActivity : Activity() {
         setContentView(root)
 
         // Entrada: la pantalla de bloqueo "se aleja" y aparece la galería
-        root.alpha = 0f
-        root.scaleX = 1.12f
-        root.scaleY = 1.12f
+        stage.pivotX = sw / 2f
+        stage.pivotY = cy
+        stage.alpha = 0f
+        stage.scaleX = 1f / 0.54f
+        stage.scaleY = 1f / 0.54f
+        topBar.alpha = 0f
         layoutAll()
-        root.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(380).setInterpolator(DecelerateInterpolator(1.7f)).start()
+        stage.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(520).setInterpolator(DecelerateInterpolator(1.9f)).start()
+        topBar.animate().alpha(1f).setStartDelay(260).setDuration(300).start()
     }
 
     private var bgRef: Bitmap? = null
@@ -377,31 +429,43 @@ class LockGalleryActivity : Activity() {
         layoutAll()
     }
 
-    /** Coloca todas las páginas y tarjetas según la posición (vertical vpos, horizontal pos de cada página). */
+    /** Coloca todas las páginas y tarjetas según la posición (vertical vpos, horizontal pos de cada página, circular). */
     private fun layoutAll() {
         for ((i, pg) in pages.withIndex()) {
             val d = i - vpos
             val ad = abs(d)
-            if (ad > 1.7f) { pg.view.visibility = View.INVISIBLE; continue }
+            if (d > 1.7f || d < -1.5f) { pg.view.visibility = View.INVISIBLE; continue }
             pg.view.visibility = View.VISIBLE
             if (!pg.built) build(pg)
-            pg.view.translationY = d * vstep
-            val s = 1f - 0.10f * min(1f, ad)
-            pg.view.scaleX = s
-            pg.view.scaleY = s
-            pg.view.alpha = 1f - 0.5f * min(1f, ad)
+            if (d >= 0f) {
+                // las categorías de abajo asoman con su tamaño real
+                pg.view.translationY = d * vstep
+                pg.view.scaleX = 1f
+                pg.view.scaleY = 1f
+                pg.view.alpha = 1f
+            } else {
+                // la de arriba se encoge, sube y se desvanece
+                val k = min(1f, ad)
+                pg.view.translationY = d * vstep * 0.85f
+                pg.view.scaleX = 1f - 0.22f * k
+                pg.view.scaleY = 1f - 0.22f * k
+                pg.view.alpha = 1f - k
+            }
             pg.title.alpha = (1f - ad * 1.7f).coerceIn(0f, 1f)
+            val n = pg.items.size
             for ((j, c) in pg.cards.withIndex()) {
-                val dj = j - pg.pos
-                val a = abs(dj)
-                if (a > 2.6f) { c.visibility = View.INVISIBLE; continue }
+                var dj = j - pg.pos
+                dj -= n * Math.floor(((dj + n / 2f) / n).toDouble()).toFloat()
+                val a2 = abs(dj)
+                if (a2 > 2.3f) { c.visibility = View.INVISIBLE; continue }
                 c.visibility = View.VISIBLE
-                c.translationX = dj * hstep
-                val sc = 1f - 0.18f * min(1f, a)
+                val sg = if (dj < 0) -1f else 1f
+                c.translationX = if (a2 <= 1f) dj * hstep else sg * (hstep + (a2 - 1f) * hstep * 0.7f)
+                val sc = if (a2 <= 1f) 1f - 0.40f * a2 else 0.60f - 0.08f * (a2 - 1f)
                 c.scaleX = sc
                 c.scaleY = sc
-                c.alpha = 1f - 0.45f * min(1f, a)
-                c.translationZ = 10f * (1f - min(1f, a))
+                c.alpha = 1f
+                c.translationZ = 10f * (1f - min(1f, a2))
             }
         }
         val pg = pages[cur()]
@@ -412,7 +476,7 @@ class LockGalleryActivity : Activity() {
         nameTv.alpha = a
         val i = idx(pg)
         pg.items.getOrNull(i)?.let { nameTv.text = it.name }
-        val key = cur() * 100 + i
+        val key = cur() * 1000 + i
         if (key != lastIdx) {
             if (lastIdx != -1) root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             lastIdx = key
@@ -452,7 +516,7 @@ class LockGalleryActivity : Activity() {
                 }
                 if (axis == 1) {
                     val pg = pages[cur()]
-                    pg.pos = (startC - dx / hstep).coerceIn(-0.35f, pg.items.size - 1 + 0.35f)
+                    pg.pos = startC - dx / hstep
                     layoutAll()
                 } else if (axis == 2) {
                     vpos = (startV - dy / vstep).coerceIn(-0.25f, pages.size - 1 + 0.25f)
@@ -470,7 +534,7 @@ class LockGalleryActivity : Activity() {
                 when (axis) {
                     1 -> {
                         val pg = pages[cur()]
-                        val t = (pg.pos - vx / hstep * 0.22f).roundToInt().coerceIn(0, pg.items.size - 1)
+                        val t = (pg.pos - vx / hstep * 0.22f).roundToInt()
                         animTo(pg.pos, t.toFloat()) { pg.pos = it }
                     }
                     2 -> {
@@ -486,7 +550,7 @@ class LockGalleryActivity : Activity() {
     private fun snap() {
         val pg = pages[cur()]
         animTo(vpos, cur().toFloat()) { vpos = it }
-        pg.pos = idx(pg).toFloat()
+        pg.pos = pg.pos.roundToInt().toFloat()
         layoutAll()
     }
 
@@ -496,11 +560,11 @@ class LockGalleryActivity : Activity() {
         val half = pw / 2f
         val dx = x - sw / 2f
         if (abs(dx) <= half) openEditor()
-        else if (dx < 0 && idx(pg) > 0) animTo(pg.pos, (idx(pg) - 1).toFloat()) { pg.pos = it }
-        else if (dx > 0 && idx(pg) < pg.items.size - 1) animTo(pg.pos, (idx(pg) + 1).toFloat()) { pg.pos = it }
+        else if (dx < 0) { val t = pg.pos.roundToInt() - 1; animTo(pg.pos, t.toFloat()) { pg.pos = it } }
+        else { val t = pg.pos.roundToInt() + 1; animTo(pg.pos, t.toFloat()) { pg.pos = it } }
     }
 
-    /** La tarjeta central se expande hasta ocupar toda la pantalla y se abre el editor sobre ella. */
+    /** La tarjeta central crece hasta el 72 % de la pantalla (como HyperOS) y se abre el editor sobre ella. */
     private fun openEditor() {
         if (busy) return
         val pg = pages[cur()]
@@ -510,14 +574,15 @@ class LockGalleryActivity : Activity() {
         busy = true
         anim?.cancel()
         for (p in pages) if (p !== pg) p.view.animate().alpha(0f).setDuration(220).start()
-        for ((k, c) in pg.cards.withIndex()) if (k != j) c.animate().alpha(0f).setDuration(220).start()
+        for ((k, c) in pg.cards.withIndex()) if (k != j) c.animate().alpha(0f).translationXBy(if (k < j) -pw * 0.3f else pw * 0.3f).setDuration(260).start()
         pg.title.animate().alpha(0f).setDuration(180).start()
         nameTv.animate().alpha(0f).setDuration(150).start()
         custBtn.animate().alpha(0f).setDuration(150).start()
         topBar.animate().alpha(0f).setDuration(180).start()
         card.translationZ = 30f
-        card.animate().scaleX(sw / pw.toFloat()).scaleY(sh / ph.toFloat()).translationY(sh / 2f - cy)
-            .setDuration(360).setInterpolator(DecelerateInterpolator(1.6f))
+        val k = Hx.CARD * sw / pw.toFloat()
+        card.animate().scaleX(k).scaleY(k).translationY(sh / 2f - cy)
+            .setDuration(420).setInterpolator(DecelerateInterpolator(1.8f))
             .withEndAction {
                 val i = Intent(this, ClockEditActivity::class.java)
                 i.putExtra("cfg", pr.cfg.enc())
@@ -527,21 +592,20 @@ class LockGalleryActivity : Activity() {
     }
 
     private fun resetAfterEdit() {
+        busy = false
+        layoutAll()
         val pg = pages[cur()]
         val j = idx(pg)
-        for (p in pages) p.view.animate().alpha(1f - 0.5f * min(1f, abs(pages.indexOf(p) - vpos))).setDuration(260).start()
+        for (p in pages) p.view.animate().alpha(1f).setDuration(260).start()
         for ((k, c) in pg.cards.withIndex()) {
-            val a = abs(k - pg.pos)
-            val sc = 1f - 0.18f * min(1f, a)
-            val al = 1f - 0.45f * min(1f, a)
-            c.animate().scaleX(sc).scaleY(sc).translationY(0f).alpha(al).setDuration(300).setInterpolator(DecelerateInterpolator(1.5f)).start()
+            c.animate().alpha(1f).translationY(0f).setDuration(300).setInterpolator(DecelerateInterpolator(1.5f)).start()
+            if (k == j) c.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(380).setInterpolator(DecelerateInterpolator(1.6f)).start()
         }
-        pg.cards.getOrNull(j)?.translationZ = 10f
+        layoutAll()
         pg.title.animate().alpha(1f).setDuration(260).start()
         nameTv.animate().alpha(1f).setDuration(260).start()
         custBtn.animate().alpha(1f).setDuration(260).start()
         topBar.animate().alpha(1f).setDuration(260).start()
-        busy = false
     }
 
     override fun onActivityResult(rc: Int, res: Int, data: Intent?) {

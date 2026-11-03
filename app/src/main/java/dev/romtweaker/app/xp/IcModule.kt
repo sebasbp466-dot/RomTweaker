@@ -245,28 +245,40 @@ object IcModule {
         val hd = prefs?.getBoolean("ic_date", true) ?: true
         val scCfg = if (sc) (prefs?.getString("sc_cfg", "") ?: "") else ""
         val key = if (sc) "S|$scCfg" else "$n|$top|$bot|$scl|$hd"
-        if (cur != null && cur.isAttachedToWindow && key == contKey) { startMirror(cur); return true }
-        if (building) return true
+        val rr = root(v)
+        val healthy = cur != null && cur.isAttachedToWindow && key == contKey && cur.parent === rr && cur.childCount > 0 && cur.visibility == View.VISIBLE &&
+            (cur.width > 0 || !cur.isLaidOut) && (cur.getChildAt(0)?.let { it.width > 0 || !it.isLaidOut } ?: false)
+        if (healthy) { startMirror(cur!!); return true }
+        if (cur != null && cur.isAttachedToWindow && key == contKey && cur.parent === rr) {
+            // contenedor roto: se repara y, mientras tanto, se deja dibujar el reloj de serie
+            x.log(Log.INFO, TAG, "ic: reparando contenedor w=" + cur.width + " h=" + cur.height + " hijos=" + cur.childCount + " a=" + cur.alpha)
+            cur.visibility = View.VISIBLE; cur.alpha = 1f
+            contKey = ""
+        }
+        if (building) return false
         val r = root(v) ?: return false
         building = true
         v.post {
             try { build(x, r, cur, n, top, bot, scl, if (sc) true else hd, key, if (sc) scCfg else null) }
-            catch (e: Throwable) { contKey = ""; x.log(Log.WARN, TAG, "ic: build " + Log.getStackTraceString(e)) }
+            catch (e: Throwable) { contKey = ""; hideDate(r, false); x.log(Log.WARN, TAG, "ic: build " + Log.getStackTraceString(e)) }
             finally { building = false }
+            v.invalidate()
         }
-        return true
+        return false
     }
 
     /** Copia la transparencia y el desplazamiento del reloj de serie (que anima SystemUI) al nuestro, fotograma a fotograma. */
     private fun startMirror(c: FrameLayout) {
         if (mirroring) return
         mirroring = true
+        var idle = 0
         val cb = object : Choreographer.FrameCallback {
             override fun doFrame(t: Long) {
                 try {
                     val cc = cont?.get()
                     val r = rootRef?.get()
-                    if (cc == null || r == null || !cc.isAttachedToWindow || !r.isShown) { mirroring = false; return }
+                    if (cc == null || r == null || !cc.isAttachedToWindow) { mirroring = false; return }
+                    if (!r.isShown) { Choreographer.getInstance().postFrameCallbackDelayed(this, 250); return }
                     var best = -1f
                     var bty = 0f
                     for (e in stock.entries) {
@@ -280,8 +292,14 @@ object IcModule {
                         if (a > best) { best = a; bty = ty }
                     }
                     if (best >= 0f) {
+                        idle = 0
                         if (cc.alpha != best) cc.alpha = best
                         if (cc.translationY != bty) cc.translationY = bty
+                    } else if (++idle > 20) {
+                        // sin reloj de serie visible: nunca dejar el nuestro invisible por un valor viejo
+                        if (cc.alpha != 1f) cc.alpha = 1f
+                        if (cc.translationY != 0f) cc.translationY = 0f
+                        idle = 0
                     }
                     Choreographer.getInstance().postFrameCallback(this)
                 } catch (e: Throwable) { mirroring = false }
