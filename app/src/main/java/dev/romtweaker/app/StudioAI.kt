@@ -87,9 +87,26 @@ object StudioAI {
             400 -> "Petición no válida (revisa la clave)"
             401, 403 -> "Clave rechazada: revisa que sea una clave de Gemini válida"
             429 -> "Límite de uso alcanzado, espera un minuto"
+            404 -> "404 " + txt.take(160)
             else -> "Error $code " + txt.take(120)
         })
         return JSONObject(txt)
+    }
+
+    private val TEXT_MODELS = listOf("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash")
+    private val IMAGE_MODELS = listOf("gemini-3.1-flash-lite-image", "gemini-3.1-flash-image", "gemini-nano-banana-2.1", "gemini-2.5-flash-image")
+
+    /** Prueba los modelos en orden: si uno no existe o ya no está disponible, pasa al siguiente. */
+    private fun callAny(key: String, models: List<String>, body: JSONObject): JSONObject {
+        var last: Throwable? = null
+        for (m in models) {
+            try { return call(key, m, body) } catch (e: Throwable) {
+                last = e
+                val msg = e.message ?: ""
+                if (!msg.startsWith("404")) throw e
+            }
+        }
+        throw RuntimeException("Ningún modelo de Gemini disponible con tu clave: " + (last?.message ?: "").take(120))
     }
 
     private const val SYS = "Eres un diseñador de relojes para pantalla de bloqueo. Responde SOLO con un objeto JSON (sin markdown) con estas claves opcionales: " +
@@ -113,7 +130,7 @@ object StudioAI {
         b.put("systemInstruction", JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", SYS4))))
         b.put("contents", org.json.JSONArray().put(JSONObject().put("parts", parts)))
         b.put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
-        val r = call(key, "gemini-2.5-flash", b)
+        val r = callAny(key, TEXT_MODELS, b)
         var t = r.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
         if (t.startsWith("```")) t = t.substringAfter('\n').substringBeforeLast("```")
         val arr = if (t.startsWith("[")) org.json.JSONArray(t) else JSONObject(t).optJSONArray("variants") ?: org.json.JSONArray().put(JSONObject(t))
@@ -154,7 +171,7 @@ object StudioAI {
         val b = JSONObject()
         b.put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", "Fondo de pantalla de móvil, formato vertical 9:16, sin texto ni marcas. $prompt")))))
         b.put("generationConfig", JSONObject().put("responseModalities", org.json.JSONArray().put("TEXT").put("IMAGE")))
-        val r = call(key, "gemini-2.5-flash-image", b)
+        val r = callAny(key, IMAGE_MODELS, b)
         val parts = r.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts")
         var out: Bitmap? = null
         for (i in 0 until parts.length()) {
