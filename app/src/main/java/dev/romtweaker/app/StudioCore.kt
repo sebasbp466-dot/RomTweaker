@@ -64,6 +64,8 @@ class StudioCfg {
     fun enc(): String = "layout=$layout;wght=$wght;wdth=$wdth;rond=$rond;slnt=$slnt;fx=$fx;tr=$tr;color=$color;size=$size;top=$top;cx=$cx;sc=$sc;date=${if (date) 1 else 0};font=$font;ol=$ol;ic=$ic;c2=$c2;glow=$glow;shadow=$shadow;cmode=$cmode;xs=$xs;gap=$gap;datef=$datef;an=$an;depth=$depth;sig=" + java.net.URLEncoder.encode(sig, "UTF-8")
     fun copy(): StudioCfg = parse(enc())
 
+    fun assign(p: StudioCfg) { styleFrom(p); top = p.top; cx = p.cx; sc = p.sc; date = p.date; sig = p.sig; datef = p.datef; depth = p.depth }
+
     /** Copia solo el estilo (no la posición, escala, firma ni formato de fecha). */
     fun styleFrom(p: StudioCfg) {
         layout = p.layout; wght = p.wght; wdth = p.wdth; rond = p.rond; slnt = p.slnt; fx = p.fx; tr = p.tr; color = p.color
@@ -758,7 +760,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
     private fun cap(s: String): String = if (s.isEmpty()) s else s.substring(0, 1).uppercase() + s.substring(1)
 
     fun refreshDate() {
-        val f = when (cfg.datef) { 1 -> "d 'de' MMMM"; 2 -> "EEEE d"; 3 -> "d/M/yyyy"; else -> "EEE, d 'de' MMM" }
+        val f = when (cfg.datef) { 1 -> "d 'de' MMMM"; 2 -> "EEEE d"; 3 -> "d/M/yyyy"; 4 -> "EEEE"; 5 -> "d MMM"; else -> "EEE, d 'de' MMM" }
         dateTv.text = cap(android.text.format.DateFormat.format(f, Calendar.getInstance()).toString())
     }
 

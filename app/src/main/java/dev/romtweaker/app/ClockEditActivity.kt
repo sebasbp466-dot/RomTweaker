@@ -7,6 +7,17 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.drawable.Drawable
 import android.graphics.Outline
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -75,6 +86,21 @@ class ClockEditActivity : Activity() {
     private var customBg: Bitmap? = null
     private var fromGallery = false
     private var closing = false
+    private val INK = 0xFF14171B.toInt()
+    private val INKD = 0x99141719.toInt()
+    private var wallBase: Bitmap? = null
+    private var wz = 1f
+    private var wpx = 0f
+    private var wpy = 0f
+    private var wBlur = 0
+    private var wBright = 0
+    private var wSat = 100
+    private var target = 0
+    private var wallMode = false
+    private var bodySv: ScrollView? = null
+    private val hist = ArrayList<String>()
+    private var aiSheet: AiSheet? = null
+    private var depthWarned = false
     private var sw = 0
     private var sh = 0
 
@@ -112,10 +138,12 @@ class ClockEditActivity : Activity() {
         root.addView(stage, FrameLayout.LayoutParams(-1, -1))
 
         wallIv = ImageView(this)
-        wallIv.scaleType = ImageView.ScaleType.CENTER_CROP
-        val wd = LockStudio.wallpaper(this)
-        if (wd != null) wallIv.setImageDrawable(wd) else wallIv.setImageBitmap(Hx.bgBitmap(this))
+        wallIv.scaleType = ImageView.ScaleType.MATRIX
+        wallBase = StudioWall.hi(this) ?: Hx.bgBitmap(this)
+        wallIv.setImageBitmap(wallBase)
         stage.addView(wallIv, FrameLayout.LayoutParams(-1, -1))
+        target = getSharedPreferences("lock", MODE_PRIVATE).getInt("wall_target", 0)
+        applyWallMatrix()
         val dim = View(this)
         dim.setBackgroundColor(0x26000000)
         stage.addView(dim, FrameLayout.LayoutParams(-1, -1))
@@ -127,6 +155,7 @@ class ClockEditActivity : Activity() {
 
         clock = StudioClock(this)
         clock.edit = true
+        hist.add(cfg.enc())
         depthMask = getSharedPreferences("lock", MODE_PRIVATE).getString("depth_mask", "") ?: ""
         if (cfg.depth == 1) {
             val mk = StudioDepth.decode(depthMask)
@@ -156,7 +185,7 @@ class ClockEditActivity : Activity() {
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
         hintTv = TextView(this)
-        hintTv.text = "Pellizca y arrastra con dos dedos"
+        hintTv.text = "Zoom y desplazamiento con dos dedos"
         hintTv.setTextColor(0xB3FFFFFF.toInt())
         hintTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
         titleCol.addView(hintTv)
@@ -178,11 +207,11 @@ class ClockEditActivity : Activity() {
             g.setColor(0x33FFFFFF)
             circ.background = g
             circ.addView(HxIcon(this, kind), FrameLayout.LayoutParams(-1, -1))
-            it1.addView(circ, LinearLayout.LayoutParams(dp(54f), dp(54f)))
+            it1.addView(circ, LinearLayout.LayoutParams(dp(46f), dp(46f)))
             val lab = TextView(this)
             lab.text = label
             lab.setTextColor(0xCCFFFFFF.toInt())
-            lab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            lab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
             lab.gravity = Gravity.CENTER
             val llp = LinearLayout.LayoutParams(-2, -2)
             llp.topMargin = dp(5f)
@@ -195,30 +224,29 @@ class ClockEditActivity : Activity() {
         bbtn(1, "IA") { aiDialog() }
         bbtn(2, "Profundidad") { toggleDepth() }
         bbtn(3, "Efectos") { openPanel(1) }
+        bbtn(4, "Sorpresa") { surprise() }
+        bbtn(5, "Deshacer") { undo() }
         val bl = FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM)
-        bl.setMargins(dp(22f), 0, dp(22f), dp(26f))
+        bl.setMargins(dp(10f), 0, dp(10f), dp(26f))
         root.addView(bottomBar, bl)
 
         // Panel inferior
         panel = LinearLayout(this)
         panel.orientation = LinearLayout.VERTICAL
         panel.isClickable = true
-        panel.setPadding(dp(16f), dp(14f), dp(16f), dp(16f))
-        val pbg = GradientDrawable()
-        pbg.cornerRadius = dp(30f).toFloat()
-        pbg.setColor(0xF2181B20.toInt())
-        panel.background = pbg
+        panel.setPadding(dp(16f), dp(14f), dp(16f), dp(22f))
+        panel.background = FrostDrawable(frostBmp(), dp(30f).toFloat(), sh)
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
         val x = TextView(this)
         x.text = "✕"
-        x.setTextColor(Color.WHITE)
+        x.setTextColor(INK)
         x.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         x.gravity = Gravity.CENTER
         val xg = GradientDrawable()
         xg.shape = GradientDrawable.OVAL
-        xg.setColor(0x26FFFFFF)
+        xg.setColor(0x14000000)
         x.background = xg
         x.setOnClickListener { closePanel() }
         Hx.press(x)
@@ -227,7 +255,7 @@ class ClockEditActivity : Activity() {
         seg.orientation = LinearLayout.HORIZONTAL
         val sgd = GradientDrawable()
         sgd.cornerRadius = dp(40f).toFloat()
-        sgd.setColor(0x1FFFFFFF)
+        sgd.setColor(0x14000000)
         seg.background = sgd
         seg.setPadding(dp(3f), dp(3f), dp(3f), dp(3f))
         for ((i, nm) in listOf("Reloj", "Fuente", "Color", "Fondo").withIndex()) {
@@ -247,19 +275,21 @@ class ClockEditActivity : Activity() {
         body = LinearLayout(this)
         body.orientation = LinearLayout.VERTICAL
         val sv = ScrollView(this)
+        bodySv = sv
         sv.isVerticalScrollBarEnabled = false
         sv.addView(body)
         panel.addView(sv, LinearLayout.LayoutParams(-1, (sh * 0.34f).toInt()))
         val pl = FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM)
-        pl.setMargins(dp(8f), 0, dp(8f), dp(8f))
+        pl.setMargins(0, 0, 0, 0)
         root.addView(panel, pl)
         panel.visibility = View.INVISIBLE
         val availH = sh - (sh * 0.34f + dp(110f)) - dp(84f) - dp(10f)
         refreshTabs()
 
         scaleDet = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            override fun onScaleBegin(d: ScaleGestureDetector): Boolean { grab(true); return true }
+            override fun onScaleBegin(d: ScaleGestureDetector): Boolean { if (!wallMode) grab(true); return true }
             override fun onScale(d: ScaleGestureDetector): Boolean {
+                if (wallMode) { wz = (wz * d.scaleFactor).coerceIn(1f, 4f); applyWallMatrix(); return true }
                 cfg.sc = (cfg.sc * d.scaleFactor).coerceIn(40f, 300f)
                 clock.applyConfig(cfg)
                 return true
@@ -352,6 +382,7 @@ class ClockEditActivity : Activity() {
                 cfg.layout = order[(order.indexOf(cfg.layout) + 1) % order.size]
             }
             clock.applyConfig(cfg)
+            snap()
             v.scaleX = 0.93f; v.scaleY = 0.93f
             v.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420).setInterpolator(OvershootInterpolator(2.4f)).start()
         }.start()
@@ -368,7 +399,7 @@ class ClockEditActivity : Activity() {
     }
 
     private fun dateCycle() {
-        cfg.datef = (cfg.datef + 1) % 4
+        cfg.datef = (cfg.datef + 1) % 6
         clock.applyConfig(cfg)
         root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
@@ -394,6 +425,11 @@ class ClockEditActivity : Activity() {
     }
 
     private fun touch(e: MotionEvent) {
+        if (e.actionMasked == MotionEvent.ACTION_POINTER_DOWN && e.pointerCount == 2) {
+            wallMode = !hitClock((e.getRawX(0) + e.getRawX(1)) / 2f, (e.getRawY(0) + e.getRawY(1)) / 2f)
+            if (wallMode) hintTv.animate().alpha(0.9f).setDuration(120).start()
+        }
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) wallMode = false
         scaleDet?.onTouchEvent(e)
         val n = e.pointerCount
         var cx = 0f
@@ -424,6 +460,7 @@ class ClockEditActivity : Activity() {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val up = e.actionMasked == MotionEvent.ACTION_UP
                 val tapIn = up && !moved && inClock && e.eventTime - downT < 320
+                if (up && moved && !wallMode) snap()
                 val tapOut = up && !moved && !inClock && open
                 grab(false)
                 lastN = 0
@@ -436,7 +473,14 @@ class ClockEditActivity : Activity() {
                 if (e.actionMasked == MotionEvent.ACTION_MOVE) {
                     val slop = ViewConfiguration.get(this).scaledTouchSlop
                     if (!moved && (abs(e.rawX - downX) > slop || abs(e.rawY - downY) > slop || n >= 2)) moved = true
-                    if (n >= 2 || moved) {
+                    if (n >= 2 && wallMode) {
+                        val s = stage.scaleX
+                        wpx += (cx - lx) / s
+                        wpy += (cy - ly) / s
+                        lx = cx
+                        ly = cy
+                        applyWallMatrix()
+                    } else if (n >= 2 || moved) {
                         if (!grabbed) grab(true)
                         tapKind = 0
                         val dm = resources.displayMetrics
@@ -464,11 +508,11 @@ class ClockEditActivity : Activity() {
     private fun refreshTabs() {
         for ((i, t) in tabViews.withIndex()) {
             val sel = i == tab
-            t.setTextColor(if (sel) Color.WHITE else 0xB3FFFFFF.toInt())
+            t.setTextColor(if (sel) INK else INKD)
             t.typeface = if (sel) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             val g = GradientDrawable()
             g.cornerRadius = dp(40f).toFloat()
-            g.setColor(if (sel) Hx.BLUE else Color.TRANSPARENT)
+            g.setColor(if (sel) 0xFFFFFFFF.toInt() else Color.TRANSPARENT)
             t.background = g
         }
     }
@@ -536,7 +580,7 @@ class ClockEditActivity : Activity() {
     private fun lab(t: String): TextView {
         val v = TextView(this)
         v.text = t
-        v.setTextColor(0xB3FFFFFF.toInt())
+        v.setTextColor(INKD)
         v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         v.setPadding(0, dp(12f), 0, dp(6f))
         return v
@@ -547,7 +591,7 @@ class ClockEditActivity : Activity() {
         l.orientation = LinearLayout.VERTICAL
         val t = TextView(this)
         t.text = "$label: $v"
-        t.setTextColor(0xB3FFFFFF.toInt())
+        t.setTextColor(INKD)
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         t.setPadding(0, dp(8f), 0, 0)
         l.addView(t)
@@ -561,7 +605,7 @@ class ClockEditActivity : Activity() {
                 if (fromUser) { on(pr + min); clock.applyConfig(cfg) }
             }
             override fun onStartTrackingTouch(s: SeekBar?) {}
-            override fun onStopTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) { snap() }
         })
         l.addView(sb, LinearLayout.LayoutParams(-1, -2))
         return l
@@ -570,8 +614,8 @@ class ClockEditActivity : Activity() {
     private fun tint(sb: SeekBar) {
         try {
             sb.progressTintList = ColorStateList.valueOf(Hx.BLUE)
-            sb.thumbTintList = ColorStateList.valueOf(Color.WHITE)
-            sb.progressBackgroundTintList = ColorStateList.valueOf(0x33FFFFFF)
+            sb.thumbTintList = ColorStateList.valueOf(Hx.BLUE)
+            sb.progressBackgroundTintList = ColorStateList.valueOf(0x33000000)
         } catch (e: Throwable) { }
     }
 
@@ -580,7 +624,7 @@ class ClockEditActivity : Activity() {
         val g = GradientDrawable()
         g.shape = GradientDrawable.OVAL
         g.setColor(col)
-        g.setStroke(dp(if (sel) 3f else 1f), if (sel) Hx.BLUE else 0x55FFFFFF)
+        g.setStroke(dp(if (sel) 3f else 1f), if (sel) Hx.BLUE else 0x33000000)
         v.background = g
         v.setOnClickListener { click() }
         Hx.press(v)
@@ -590,6 +634,7 @@ class ClockEditActivity : Activity() {
     private fun applyPreset(p: StudioCfg) {
         val tgt: View = if (cfg.ic > 0 || p.ic > 0) clock else if (cfg.layout == "analog" || p.layout == "analog") clock.analog else clock.digits
         cfg.styleFrom(p)
+        snap()
         clock.applyConfig(cfg)
         sg.x = 0.9f; sg.t = 1f; sg.v += 3f; kick()
         tgt.alpha = 0.35f
@@ -615,25 +660,42 @@ class ClockEditActivity : Activity() {
                 val tw = dp(66f)
                 val th = (tw * sh / sw.toFloat()).toInt()
                 val bg = Hx.bgBitmap(this)
-                for (c in StudioPresets.cats) {
+                val byCat = StudioPresets.all.groupBy { it.cat }
+                val pending = ArrayList<Triple<LinearLayout, View, List<StudioPresets.P>>>()
+                for (c in StudioPresets.catsAll) {
+                    val items = byCat[c] ?: continue
                     body.addView(lab(c))
                     val hs = HorizontalScrollView(this)
                     hs.isHorizontalScrollBarEnabled = false
                     val row = LinearLayout(this)
                     row.orientation = LinearLayout.HORIZONTAL
-                    for (pr in StudioPresets.all.filter { it.cat == c }) {
-                        val t = StudioTile.make(this, pr.cfg, tw, th, 14f, bg)
-                        t.setOnClickListener { applyPreset(pr.cfg) }
-                        Hx.press(t)
-                        rings.add(Pair(t, pr.cfg))
-                        val lp = LinearLayout.LayoutParams(tw, th)
-                        lp.rightMargin = dp(10f)
-                        row.addView(t, lp)
-                    }
                     hs.addView(row)
-                    body.addView(hs, LinearLayout.LayoutParams(-1, -2))
+                    body.addView(hs, LinearLayout.LayoutParams(-1, th + dp(6f)))
+                    pending.add(Triple(row, hs, items))
                 }
-                refreshRings()
+                val check = {
+                    val svw = bodySv
+                    if (svw != null) {
+                        val it = pending.iterator()
+                        while (it.hasNext()) {
+                            val p = it.next()
+                            val top = p.second.top - svw.scrollY
+                            if (top < svw.height + dp(260f) && top + p.second.height > -dp(260f)) {
+                                for (pr in p.third) {
+                                    val t = StudioTile.make(this, pr.cfg, tw, th, 14f, bg)
+                                    t.setOnClickListener { applyPreset(pr.cfg) }
+                                    Hx.press(t)
+                                    rings.add(Pair(t, pr.cfg))
+                                    p.first.addView(t, LinearLayout.LayoutParams(tw, th).also { l -> l.rightMargin = dp(10f) })
+                                }
+                                it.remove()
+                            }
+                        }
+                        refreshRings()
+                    }
+                }
+                bodySv?.setOnScrollChangeListener { _, _, _, _, _ -> check() }
+                bodySv?.post { check() }
             }
             1 -> fillFont()
             2 -> fillColor()
@@ -656,7 +718,7 @@ class ClockEditActivity : Activity() {
         for (f in list) {
             val t = TextView(this)
             t.text = "35"
-            t.setTextColor(Color.WHITE)
+            t.setTextColor(INK)
             t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
             t.gravity = Gravity.CENTER
             when (f.font) {
@@ -674,8 +736,8 @@ class ClockEditActivity : Activity() {
             val sel = cfg.wght == f.w && cfg.wdth == f.wd && cfg.rond == f.ro && cfg.font == f.font
             val g = GradientDrawable()
             g.cornerRadius = dp(16f).toFloat()
-            g.setColor(0x1FFFFFFF)
-            g.setStroke(dp(if (sel) 3f else 1f), if (sel) Hx.BLUE else 0x22FFFFFF)
+            g.setColor(0x14000000)
+            g.setStroke(dp(if (sel) 3f else 1f), if (sel) Hx.BLUE else 0x22000000)
             t.background = g
             t.setOnClickListener {
                 cfg.wght = f.w; cfg.wdth = f.wd; cfg.rond = f.ro; cfg.font = f.font
@@ -700,11 +762,11 @@ class ClockEditActivity : Activity() {
         sr.gravity = Gravity.CENTER_VERTICAL
         val a1 = TextView(this)
         a1.text = "A"
-        a1.setTextColor(0xB3FFFFFF.toInt())
+        a1.setTextColor(INKD)
         a1.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         val a2 = TextView(this)
         a2.text = "A"
-        a2.setTextColor(Color.WHITE)
+        a2.setTextColor(INK)
         a2.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
         val sb = SeekBar(this)
         tint(sb)
@@ -727,14 +789,14 @@ class ClockEditActivity : Activity() {
             val sel = cfg.fx == p.first
             val t = TextView(this)
             t.text = p.second
-            t.setTextColor(Color.WHITE)
+            t.setTextColor(INK)
             t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
             t.gravity = Gravity.CENTER
             t.setPadding(0, dp(11f), 0, dp(11f))
             val g = GradientDrawable()
             g.cornerRadius = dp(14f).toFloat()
-            g.setColor(if (sel) 0x333D8BFF else 0x1AFFFFFF)
-            g.setStroke(dp(if (sel) 2.5f else 1f), if (sel) Hx.BLUE else 0x22FFFFFF)
+            g.setColor(if (sel) 0x333D8BFF else 0x14000000)
+            g.setStroke(dp(if (sel) 2.5f else 1f), if (sel) Hx.BLUE else 0x22000000)
             t.background = g
             t.setOnClickListener { cfg.fx = p.first; clock.applyConfig(cfg); fillBody() }
             Hx.press(t)
@@ -745,23 +807,47 @@ class ClockEditActivity : Activity() {
         body.addView(er, LinearLayout.LayoutParams(-1, -2))
         body.addView(slider("Transparencia", 0, 100, cfg.tr) { cfg.tr = it })
 
-        body.addView(m.switchRow("Mostrar fecha", "", cfg.date) { v -> cfg.date = v; clock.applyConfig(cfg) }, m.lp(m.MP, m.WC, 0, 10, 0, 0))
-        body.addView(m.switchRow("Solo contorno", "", cfg.ol == 1) { v -> cfg.ol = if (v) 1 else 0; clock.applyConfig(cfg) }, m.lp(m.MP, m.WC, 0, 0, 0, 0))
+        body.addView(lsw("Mostrar fecha", "", cfg.date) { v -> cfg.date = v; clock.applyConfig(cfg) }, m.lp(m.MP, m.WC, 0, 10, 0, 0))
+        body.addView(lsw("Solo contorno", "", cfg.ol == 1) { v -> cfg.ol = if (v) 1 else 0; clock.applyConfig(cfg) }, m.lp(m.MP, m.WC, 0, 0, 0, 0))
+        body.addView(lab("Formato de fecha"))
+        val dfs = HorizontalScrollView(this)
+        dfs.isHorizontalScrollBarEnabled = false
+        val dfr = LinearLayout(this)
+        val nowC = java.util.Calendar.getInstance()
+        for ((i, f) in listOf("EEE, d MMM", "d 'de' MMMM", "EEEE d", "d/M/yyyy", "EEEE", "d MMM").withIndex()) {
+            val lp = LinearLayout.LayoutParams(-2, -2)
+            lp.rightMargin = dp(8f)
+            dfr.addView(chip(android.text.format.DateFormat.format(f, nowC).toString(), cfg.datef == i, 0f) { cfg.datef = i; clock.applyConfig(cfg); snap(); fillBody() }, lp)
+        }
+        dfs.addView(dfr)
+        body.addView(dfs, LinearLayout.LayoutParams(-1, -2))
+        body.addView(lab("Compartir estilo"))
+        val cpr = LinearLayout(this)
+        cpr.addView(chip("Copiar estilo", false, 0f) {
+            (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("estilo", cfg.enc()))
+            Toast.makeText(this, "Estilo copiado", Toast.LENGTH_SHORT).show()
+        }, LinearLayout.LayoutParams(-2, -2).also { it.rightMargin = dp(8f) })
+        cpr.addView(chip("Pegar estilo", false, 0f) {
+            val t = (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+            if (t.contains("layout=")) { val p = StudioCfg.parse(t); applyPreset(p); cfg.datef = p.datef; cfg.sig = p.sig; clock.applyConfig(cfg); Toast.makeText(this, "Estilo pegado", Toast.LENGTH_SHORT).show() }
+            else Toast.makeText(this, "No hay un estilo copiado", Toast.LENGTH_SHORT).show()
+        }, LinearLayout.LayoutParams(-2, -2))
+        body.addView(cpr)
         body.addView(lab("Disposición"))
         val lr = LinearLayout(this)
         lr.orientation = LinearLayout.HORIZONTAL
-        for (p in listOf("stack" to "Apilado", "inline" to "Línea", "col" to "Vertical", "grid" to "Cuadrícula", "diag" to "Diagonal")) {
+        for (p in listOf("stack" to "Apilado", "inline" to "Línea", "col" to "Vertical", "grid" to "Cuadr.", "diag" to "Diagonal", "words" to "Texto", "analog" to "Aguja")) {
             val sel = cfg.layout == p.first && cfg.ic == 0
             val t = TextView(this)
             t.text = p.second
-            t.setTextColor(Color.WHITE)
-            t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            t.setTextColor(INK)
+            t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
             t.gravity = Gravity.CENTER
             t.setPadding(0, dp(10f), 0, dp(10f))
             val g = GradientDrawable()
             g.cornerRadius = dp(14f).toFloat()
-            g.setColor(if (sel) 0x333D8BFF else 0x1AFFFFFF)
-            g.setStroke(dp(if (sel) 2.5f else 1f), if (sel) Hx.BLUE else 0x22FFFFFF)
+            g.setColor(if (sel) 0x333D8BFF else 0x14000000)
+            g.setStroke(dp(if (sel) 2.5f else 1f), if (sel) Hx.BLUE else 0x22000000)
             t.background = g
             t.setOnClickListener { cfg.layout = p.first; cfg.ic = 0; clock.applyConfig(cfg); fillBody() }
             Hx.press(t)
@@ -787,14 +873,14 @@ class ClockEditActivity : Activity() {
     private fun chip(label: String, sel: Boolean, w: Float, click: () -> Unit): TextView {
         val t = TextView(this)
         t.text = label
-        t.setTextColor(Color.WHITE)
+        t.setTextColor(INK)
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         t.gravity = Gravity.CENTER
         t.setPadding(dp(14f), dp(10f), dp(14f), dp(10f))
         val g = GradientDrawable()
         g.cornerRadius = dp(40f).toFloat()
-        g.setColor(if (sel) 0x333D8BFF else 0x1AFFFFFF)
-        g.setStroke(dp(if (sel) 2.5f else 1f), if (sel) Hx.BLUE else 0x22FFFFFF)
+        g.setColor(if (sel) 0x333D8BFF else 0x14000000)
+        g.setStroke(dp(if (sel) 2.5f else 1f), if (sel) Hx.BLUE else 0x22000000)
         t.background = g
         t.setOnClickListener { click() }
         Hx.press(t)
@@ -849,7 +935,7 @@ class ClockEditActivity : Activity() {
             } else {
                 val n = TextView(this)
                 n.text = "El color se calcula según tu fondo de pantalla (claro u oscuro y su tono)."
-                n.setTextColor(0x99FFFFFF.toInt())
+                n.setTextColor(INKD)
                 n.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 n.setPadding(0, dp(10f), 0, 0)
                 body.addView(n)
@@ -857,13 +943,13 @@ class ClockEditActivity : Activity() {
         } else {
             val n = TextView(this)
             n.text = "Usa los colores dinámicos de tu sistema (Material You), los mismos que el tema del móvil."
-            n.setTextColor(0x99FFFFFF.toInt())
+            n.setTextColor(INKD)
             n.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             n.setPadding(0, dp(10f), 0, 0)
             body.addView(n)
         }
         if (cfg.cmode != 3) {
-            body.addView(m.switchRow("Degradado", "", cfg.c2 != 0) { v ->
+            body.addView(lsw("Degradado", "", cfg.c2 != 0) { v ->
                 if (v) {
                     val q = FloatArray(3); Color.colorToHSV(cfg.color, q)
                     cfg.c2 = Color.HSVToColor(floatArrayOf((q[0] + 40f) % 360f, minOf(1f, maxOf(q[1], 0.4f)), maxOf(q[2], 0.8f)))
@@ -885,21 +971,116 @@ class ClockEditActivity : Activity() {
     private fun selectBg(idx: Int) {
         bgSel = idx
         if (cfg.depth == 1) { cfg.depth = 0; showDepth(false) }
-        when {
-            idx in 0 until StudioBg.count -> wallIv.setImageBitmap(StudioBg.gen(idx, sw / 2, sh / 2))
-            idx == 100 && customBg != null -> wallIv.setImageBitmap(customBg)
-            else -> {
-                val wd = LockStudio.wallpaper(this)
-                if (wd != null) wallIv.setImageDrawable(wd) else wallIv.setImageBitmap(Hx.bgBitmap(this))
-            }
+        val cb = customBg
+        wallBase = when {
+            idx in 0 until StudioBg.count -> StudioBg.gen(idx, sw / 2, sh / 2)
+            idx == 100 && cb != null -> cb
+            else -> StudioWall.hi(this) ?: Hx.bgBitmap(this)
         }
+        wallIv.setImageBitmap(wallBase)
+        wz = 1f; wpx = 0f; wpy = 0f
+        applyWallMatrix()
+        applyWallFx()
         wallIv.alpha = 0.4f
         wallIv.animate().alpha(1f).setDuration(320).start()
+        panel.background = FrostDrawable(frostBmp(), dp(30f).toFloat(), sh)
         fillBody()
     }
 
+    private fun wallMatrix(b: Bitmap, w: Int, h: Int): Matrix {
+        val s0 = maxOf(w / b.width.toFloat(), h / b.height.toFloat())
+        val s = s0 * wz
+        val maxX = maxOf(0f, (b.width * s - w) / 2f)
+        val maxY = maxOf(0f, (b.height * s - h) / 2f)
+        wpx = wpx.coerceIn(-maxX, maxX)
+        wpy = wpy.coerceIn(-maxY, maxY)
+        val m = Matrix()
+        m.setScale(s, s)
+        m.postTranslate((w - b.width * s) / 2f + wpx, (h - b.height * s) / 2f + wpy)
+        return m
+    }
+
+    private fun applyWallMatrix() {
+        val b = wallBase ?: return
+        wallIv.imageMatrix = wallMatrix(b, sw, sh)
+        wallChanged()
+    }
+
+    private fun wallChanged() {
+        if (cfg.depth == 1 && (wz != 1f || wpx != 0f || wpy != 0f || wBlur != 0 || wBright != 0 || wSat != 100)) {
+            cfg.depth = 0
+            showDepth(false)
+            if (!depthWarned) { depthWarned = true; Toast.makeText(this, "Profundidad desactivada: el fondo cambió", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun applyWallFx() {
+        val cm = ColorMatrix()
+        cm.setSaturation(wSat / 100f)
+        val f = 1f + wBright / 100f
+        cm.postConcat(ColorMatrix(floatArrayOf(f, 0f, 0f, 0f, 0f, 0f, f, 0f, 0f, 0f, 0f, 0f, f, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
+        wallIv.colorFilter = if (wBright == 0 && wSat == 100) null else ColorMatrixColorFilter(cm)
+        try {
+            val r = wBlur / 100f * 36f * resources.displayMetrics.density
+            wallIv.setRenderEffect(if (wBlur > 0) RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)
+        } catch (e: Throwable) { }
+        wallChanged()
+    }
+
+    private fun bakeWall(sel: Int, cb: Bitmap?): Bitmap? {
+        val base: Bitmap = when {
+            sel in 0 until StudioBg.count -> StudioBg.gen(sel, sw, sh)
+            sel == 100 && cb != null -> cb
+            else -> StudioWall.hi(this) ?: return null
+        }
+        val o = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888)
+        Canvas(o).drawBitmap(base, wallMatrix(base, sw, sh), Paint(Paint.FILTER_BITMAP_FLAG))
+        return StudioBg.filter(o, wBlur, wBright, wSat)
+    }
+
+    private fun frostBmp(): Bitmap {
+        val b = wallBase ?: Hx.bgBitmap(this)
+        val w = 28
+        return Bitmap.createScaledBitmap(b, w, maxOf(2, w * b.height / b.width), true)
+    }
+
+    private fun lsw(title: String, desc: String, on: Boolean, cb: (Boolean) -> Unit): LinearLayout {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        val t = TextView(this)
+        t.text = title
+        t.setTextColor(INK)
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        col.addView(t)
+        if (desc.isNotEmpty()) { val d = TextView(this); d.text = desc; d.setTextColor(INKD); d.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); col.addView(d) }
+        row.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+        val sw2 = android.widget.Switch(this)
+        sw2.isChecked = on
+        try {
+            val st = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            sw2.thumbTintList = ColorStateList(st, intArrayOf(Color.WHITE, 0xFFFFFFFF.toInt()))
+            sw2.trackTintList = ColorStateList(st, intArrayOf(Hx.BLUE, 0x44000000))
+        } catch (e: Throwable) { }
+        sw2.setOnCheckedChangeListener { _, v -> cb(v) }
+        row.addView(sw2)
+        return row
+    }
+
     private fun fillBg() {
-        body.addView(lab("Fondo de la pantalla de bloqueo"))
+        body.addView(lab("Aplicar el fondo a"))
+        val tr = LinearLayout(this)
+        for ((i, n) in listOf("Bloqueo", "Inicio", "Ambas").withIndex()) {
+            tr.addView(chip(n, target == i, 0f) {
+                target = i
+                getSharedPreferences("lock", MODE_PRIVATE).edit().putInt("wall_target", i).apply()
+                fillBody()
+            }, LinearLayout.LayoutParams(-2, -2).also { it.rightMargin = dp(8f) })
+        }
+        body.addView(tr)
+        body.addView(lab("Fondo"))
         val hs = HorizontalScrollView(this)
         hs.isHorizontalScrollBarEnabled = false
         val row = LinearLayout(this)
@@ -916,6 +1097,7 @@ class ClockEditActivity : Activity() {
                 t.setTextColor(Color.WHITE)
                 t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
                 t.typeface = Typeface.DEFAULT_BOLD
+                t.setShadowLayer(4f, 0f, 0f, 0xAA000000.toInt())
                 v.addView(t, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
             }
             v.clipToOutline = true
@@ -934,13 +1116,20 @@ class ClockEditActivity : Activity() {
             row.addView(v, lp)
         }
         dot(-1, Hx.bgBitmap(this), "Actual")
-        for (i in 0 until StudioBg.count) dot(i, StudioBg.gen(i, 90, 160), null)
         dot(100, customBg, "Galería")
+        for (i in 0 until StudioBg.count) dot(i, StudioBg.gen(i, 90, 160), if (i % 6 == 0) StudioBg.label(i) else null)
         hs.addView(row)
         body.addView(hs, LinearLayout.LayoutParams(-1, -2))
+        body.addView(lab("Ajustes del fondo"))
+        body.addView(slider("Desenfoque", 0, 100, wBlur) { wBlur = it; applyWallFx() })
+        body.addView(slider("Brillo", -50, 50, wBright) { wBright = it; applyWallFx() })
+        body.addView(slider("Saturación", 0, 200, wSat) { wSat = it; applyWallFx() })
+        val rr = LinearLayout(this)
+        rr.addView(chip("Restablecer fondo", false, 0f) { wBlur = 0; wBright = 0; wSat = 100; selectBg(-1) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(10f) })
+        body.addView(rr)
         val note = TextView(this)
-        note.text = "El fondo se cambia al pulsar Aplicar."
-        note.setTextColor(0x88FFFFFF.toInt())
+        note.text = "Con dos dedos sobre el fondo (fuera del reloj) haces zoom y lo mueves. Todo se aplica al pulsar Aplicar."
+        note.setTextColor(INKD)
         note.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         note.setPadding(0, dp(10f), 0, 0)
         body.addView(note)
@@ -1029,49 +1218,50 @@ class ClockEditActivity : Activity() {
     // ---------- IA (Gemini) ----------
 
     private fun aiDialog() {
-        val p = getSharedPreferences("lock", MODE_PRIVATE)
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.setPadding(dp(20f), dp(8f), dp(20f), 0)
-        val key = android.widget.EditText(this)
-        key.hint = "Clave API de Gemini (aistudio.google.com)"
-        key.setText(p.getString("gem_key", ""))
-        key.setSingleLine(true)
-        val pr = android.widget.EditText(this)
-        pr.hint = "Describe el reloj o el fondo (ej: reloj dorado elegante con serif)"
-        col.addView(key)
-        col.addView(pr)
-        val d = android.app.AlertDialog.Builder(this).setTitle("IA con Gemini").setView(col)
-            .setPositiveButton("Crear reloj") { _, _ -> aiRun(key.text.toString().trim(), pr.text.toString().trim(), false) }
-            .setNeutralButton("Crear fondo") { _, _ -> aiRun(key.text.toString().trim(), pr.text.toString().trim(), true) }
-            .setNegativeButton("Cancelar", null).create()
-        d.show()
+        if (aiSheet != null) return
+        if (open) closePanel()
+        val sheet = AiSheet(this, object : AiSheet.Host {
+            override fun style(c: StudioCfg) {
+                cfg.styleFrom(c)
+                cfg.datef = c.datef
+                cfg.sig = c.sig
+                clock.applyConfig(cfg)
+                sg.x = 0.88f; sg.t = 1f; sg.v += 3f; kick()
+                snap()
+            }
+            override fun curCfg(): StudioCfg = cfg
+            override fun wallBmp(): Bitmap? = wallBase
+            override fun useWall(b: Bitmap) { customBg = b; selectBg(100) }
+            override fun closeSheet() { aiSheet?.let { root.removeView(it) }; aiSheet = null }
+        })
+        root.addView(sheet, FrameLayout.LayoutParams(-1, -1))
+        aiSheet = sheet
     }
 
-    private fun aiRun(key: String, prompt: String, wall: Boolean) {
-        if (key.isEmpty() || prompt.isEmpty()) { Toast.makeText(this, "Falta la clave o la descripción", Toast.LENGTH_SHORT).show(); return }
-        getSharedPreferences("lock", MODE_PRIVATE).edit().putString("gem_key", key).apply()
-        Toast.makeText(this, "Gemini trabajando…", Toast.LENGTH_SHORT).show()
-        Thread {
-            if (wall) {
-                val r = StudioAI.wallpaper(key, prompt)
-                runOnUiThread {
-                    if (r.first == null) Toast.makeText(this, "Gemini: " + r.second, Toast.LENGTH_LONG).show()
-                    else { customBg = r.first; if (cfg.depth == 1) { cfg.depth = 0; showDepth(false) }; selectBg(100) }
-                }
-            } else {
-                val r = StudioAI.clockStyle(key, prompt)
-                runOnUiThread {
-                    if (r.first == null) Toast.makeText(this, "Gemini: " + r.second, Toast.LENGTH_LONG).show()
-                    else {
-                        StudioAI.applyJson(cfg, r.first!!)
-                        clock.applyConfig(cfg)
-                        sg.x = 0.88f; sg.t = 1f; sg.v += 3f; kick()
-                        Toast.makeText(this, "Listo. Ajusta lo que quieras", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }.start()
+    // ---------- Deshacer / sorpresa ----------
+
+    private fun snap() {
+        val e = cfg.enc()
+        if (hist.isEmpty() || hist[hist.size - 1] != e) { hist.add(e); if (hist.size > 40) hist.removeAt(0) }
+    }
+
+    private fun undo() {
+        if (hist.size <= 1) { Toast.makeText(this, "Nada que deshacer", Toast.LENGTH_SHORT).show(); return }
+        hist.removeAt(hist.size - 1)
+        cfg.assign(StudioCfg.parse(hist[hist.size - 1]))
+        updatePos()
+        clock.applyConfig(cfg)
+        sg.x = 0.92f; sg.t = 1f; sg.v += 2f; kick()
+        root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        if (open) fillBody()
+    }
+
+    private fun surprise() {
+        val l = StudioPresets.all.filter { it.cfg.ic == 0 }
+        val p = l[java.util.Random().nextInt(l.size)]
+        applyPreset(p.cfg)
+        Toast.makeText(this, "Sorpresa: " + p.name + " (" + p.cat + ")", Toast.LENGTH_SHORT).show()
+        root.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
     }
 
     // ---------- Salir / Aplicar ----------
@@ -1088,12 +1278,14 @@ class ClockEditActivity : Activity() {
         closing = true
         val p = getSharedPreferences("lock", MODE_PRIVATE)
         p.edit().putString("sc_cfg", cfg.enc()).putBoolean("sc_on", true).putBoolean("ic_on", false).putString("depth_mask", if (cfg.depth == 1) depthMask else "").apply()
+        StudioRecents.add(this, cfg.enc())
         val sel = bgSel
         val cb = customBg
+        val changed = bgSel != -1 || wz != 1f || wpx != 0f || wpy != 0f || wBlur != 0 || wBright != 0 || wSat != 100
+        val tgt = target
         Thread {
             var ok = true
-            if (sel in 0 until StudioBg.count) ok = StudioBg.setLock(this, StudioBg.gen(sel, sw, sh))
-            else if (sel == 100 && cb != null) ok = StudioBg.setLock(this, cb)
+            if (changed) { val bm = bakeWall(sel, cb); ok = bm != null && StudioBg.setWall(this, bm, tgt) }
             StudioWall.reset()
             val pushed = StudioPush.push(p)
             runOnUiThread {
@@ -1107,7 +1299,43 @@ class ClockEditActivity : Activity() {
         }.start()
     }
 
-    override fun onBackPressed() { if (open) closePanel() else cancel() }
+    override fun onBackPressed() { if (aiSheet != null) aiSheet?.close() else if (open) closePanel() else cancel() }
+}
+
+/** Fondo de panel claro de cristal: el fondo de pantalla desenfocado + velo blanco, esquinas superiores redondeadas. */
+class FrostDrawable(private val bmp: Bitmap, private val r: Float, private val screenH: Int) : Drawable() {
+    private val p = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val veil = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val edge = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    init {
+        val cm = ColorMatrix()
+        cm.setSaturation(1.5f)
+        p.colorFilter = ColorMatrixColorFilter(cm)
+        veil.color = 0xC8FFFFFF.toInt()
+        edge.style = Paint.Style.STROKE
+        edge.strokeWidth = 2f
+        edge.color = 0x99FFFFFF.toInt()
+    }
+
+    override fun draw(c: Canvas) {
+        val b = bounds
+        val path = Path()
+        path.addRoundRect(RectF(b), floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f), Path.Direction.CW)
+        c.save()
+        c.clipPath(path)
+        val frac = (b.height() / screenH.toFloat()).coerceIn(0.1f, 1f)
+        val srcTop = (bmp.height * (1f - frac)).toInt().coerceIn(0, bmp.height - 1)
+        c.drawBitmap(bmp, android.graphics.Rect(0, srcTop, bmp.width, bmp.height), b, p)
+        c.drawRect(RectF(b), veil)
+        c.restore()
+        c.drawPath(path, edge)
+    }
+
+    override fun setAlpha(a: Int) {}
+    override fun setColorFilter(cf: ColorFilter?) {}
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
 }
 
 /** Envía la configuración del editor al módulo LSPosed. */

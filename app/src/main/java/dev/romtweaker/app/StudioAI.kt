@@ -83,7 +83,12 @@ object StudioAI {
         c.outputStream.use { it.write(body.toString().toByteArray()) }
         val code = c.responseCode
         val txt = (if (code in 200..299) c.inputStream else c.errorStream).bufferedReader().use { it.readText() }
-        if (code !in 200..299) throw RuntimeException("HTTP $code " + txt.take(200))
+        if (code !in 200..299) throw RuntimeException(when (code) {
+            400 -> "Petición no válida (revisa la clave)"
+            401, 403 -> "Clave rechazada: revisa que sea una clave de Gemini válida"
+            429 -> "Límite de uso alcanzado, espera un minuto"
+            else -> "Error $code " + txt.take(120)
+        })
         return JSONObject(txt)
     }
 
@@ -94,16 +99,35 @@ object StudioAI {
 
     private fun hex(s: String?): Int? = try { if (s.isNullOrEmpty() || s == "null") null else android.graphics.Color.parseColor(s) } catch (e: Throwable) { null }
 
-    fun clockStyle(key: String, prompt: String): Pair<JSONObject?, String?> = try {
+    private const val SYS4 = "Eres un diseñador de relojes para pantalla de bloqueo. Responde SOLO con JSON (sin markdown): {\"variants\":[obj,obj,obj,obj]} con 4 variantes MUY distintas entre sí; cada obj usa estas claves opcionales: " +
+        "layout (stack|inline|col|grid|diag|words|analog), an (1-12, solo si layout=analog), font (flex|serif|mono|anton|antonio|bigshoulders|bodoni|italiana|caveat|dmserif|syne|bebas), " +
+        "wght (100-900), wdth (35-150, solo flex), rond (0-100, solo flex), fx (solid|glass|blend|overlay), tr (0-100), color (#RRGGBB), c2 (#RRGGBB para degradado o null), " +
+        "glow (0-100), shadow (0-100), size (150-260), xs (60-160), gap (0-40), ol (0|1 contorno), datef (0-3), sig (texto corto de firma). Si se adjunta una imagen es el fondo de pantalla: elige colores que combinen y contrasten con ella."
+
+    /** 4 variantes de estilo a partir de un texto y, opcionalmente, del fondo (JPEG en base64). */
+    fun clockVariants(key: String, prompt: String, imgB64: String?): Pair<List<JSONObject>, String?> = try {
+        val parts = org.json.JSONArray()
+        if (imgB64 != null) parts.put(JSONObject().put("inline_data", JSONObject().put("mime_type", "image/jpeg").put("data", imgB64)))
+        parts.put(JSONObject().put("text", if (prompt.isEmpty()) "Diseña relojes que combinen con este fondo." else prompt))
         val b = JSONObject()
-        b.put("systemInstruction", JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", SYS))))
-        b.put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", prompt)))))
+        b.put("systemInstruction", JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", SYS4))))
+        b.put("contents", org.json.JSONArray().put(JSONObject().put("parts", parts)))
         b.put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
         val r = call(key, "gemini-2.5-flash", b)
         var t = r.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
         if (t.startsWith("```")) t = t.substringAfter('\n').substringBeforeLast("```")
-        Pair(JSONObject(t), null)
-    } catch (e: Throwable) { Pair(null, (e.message ?: e.toString()).take(160)) }
+        val arr = if (t.startsWith("[")) org.json.JSONArray(t) else JSONObject(t).optJSONArray("variants") ?: org.json.JSONArray().put(JSONObject(t))
+        val out = ArrayList<JSONObject>()
+        for (i in 0 until arr.length()) out.add(arr.getJSONObject(i))
+        Pair(out, null)
+    } catch (e: Throwable) { Pair(emptyList<JSONObject>(), (e.message ?: e.toString()).take(160)) }
+
+    fun jpegB64(b: Bitmap): String {
+        val s = Bitmap.createScaledBitmap(b, 384, (b.height * 384 / b.width.toFloat()).toInt().coerceAtLeast(1), true)
+        val bo = ByteArrayOutputStream()
+        s.compress(Bitmap.CompressFormat.JPEG, 80, bo)
+        return Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP)
+    }
 
     fun applyJson(c: StudioCfg, j: JSONObject) {
         j.optString("layout").takeIf { it in listOf("stack", "inline", "col", "grid", "diag", "words", "analog") }?.let { c.layout = it; c.ic = 0 }

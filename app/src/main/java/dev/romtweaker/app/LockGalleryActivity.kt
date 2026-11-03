@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Outline
@@ -174,13 +176,74 @@ object StudioPresets {
         st("Iconify $n", "Iconify ${((n - 1) / 12) * 12 + 1}–${((n - 1) / 12) * 12 + 12}") { ic = n; cmode = 5; fx = "solid"; top = 100f; size = 170 }
     }
 
-    val all: List<P> = base + icons
+    private class Pal(val name: String, val c1: Int, val c2: Int)
+    private val pals = listOf(
+        Pal("Coral", 0xFFFF8A6B.toInt(), 0xFFFFD2B8.toInt()), Pal("Océano", 0xFF6EC8FF.toInt(), 0xFF2F6BFF.toInt()),
+        Pal("Bosque", 0xFFA6F0B2.toInt(), 0xFF2FAE6A.toInt()), Pal("Lavanda", 0xFFD8C2FF.toInt(), 0xFF8E6BFF.toInt()),
+        Pal("Dorado", 0xFFFFE6A3.toInt(), 0xFFF0A400.toInt()), Pal("Hielo", 0xFFEAF8FF.toInt(), 0xFF9AD8FF.toInt()),
+        Pal("Fuego", 0xFFFFD36B.toInt(), 0xFFFF3D2E.toInt()), Pal("Menta", 0xFFC9FFE9.toInt(), 0xFF34D8A0.toInt()),
+        Pal("Rosa", 0xFFFFC2DD.toInt(), 0xFFFF4D9A.toInt()), Pal("Noche", 0xFFB9C4FF.toInt(), 0xFF3B3FA8.toInt()),
+        Pal("Arena", 0xFFFFF1DC.toInt(), 0xFFD9A86C.toInt()), Pal("Cereza", 0xFFFFB3C0.toInt(), 0xFFC21F4B.toInt()),
+        Pal("Neón", 0xFFB6FF3D.toInt(), 0xFF00E5FF.toInt()), Pal("Atardecer", 0xFFFFE08A.toInt(), 0xFFFF5E8A.toInt()),
+        Pal("Aurora", 0xFF9AFFD1.toInt(), 0xFF7A5CFF.toInt()), Pal("Mármol", 0xFFFFFFFF.toInt(), 0xFFB7BDC6.toInt()),
+        Pal("Tinta", 0xFF16181D.toInt(), 0xFF4B5563.toInt()), Pal("Mandarina", 0xFFFFC46B.toInt(), 0xFFFF6A00.toInt()),
+        Pal("Uva", 0xFFE0B3FF.toInt(), 0xFF7B1FA2.toInt()), Pal("Turquesa", 0xFFB3FFF5.toInt(), 0xFF00A5A5.toInt())
+    )
+
+    private fun recipe(i: Int, c: StudioCfg) {
+        c.fx = "solid"
+        when (i) {
+            0 -> { c.layout = "stack"; c.wght = 800; c.wdth = 100; c.size = 190 }
+            1 -> { c.layout = "stack"; c.wght = 200; c.wdth = 50; c.size = 215 }
+            2 -> { c.layout = "inline"; c.wght = 500; c.wdth = 90; c.size = 230 }
+            3 -> { c.layout = "stack"; c.font = "bodoni"; c.size = 200 }
+            4 -> { c.layout = "grid"; c.wght = 400; c.wdth = 70; c.rond = 40; c.size = 200 }
+            5 -> { c.layout = "col"; c.font = "antonio"; c.wght = 400; c.size = 195 }
+            6 -> { c.layout = "stack"; c.font = "anton"; c.gap = 6; c.size = 205 }
+            7 -> { c.layout = "diag"; c.wght = 300; c.wdth = 60; c.size = 190 }
+            8 -> { c.layout = "stack"; c.wght = 700; c.rond = 100; c.glow = 40; c.size = 190 }
+            9 -> { c.layout = "inline"; c.font = "syne"; c.wght = 800; c.size = 360 }
+            10 -> { c.layout = "stack"; c.font = "bigshoulders"; c.wght = 800; c.size = 225 }
+            else -> { c.layout = "words"; c.wght = 600; c.size = 150 }
+        }
+    }
+
+    private val collections: List<P> = pals.flatMap { pl ->
+        val dig = (0 until 12).map { i ->
+            val c = StudioCfg()
+            recipe(i, c)
+            c.color = pl.c1
+            if (i % 2 == 0) c.c2 = pl.c2
+            P("${pl.name} ${i + 1}", "Paleta · ${pl.name}", c)
+        }
+        val ana = (0 until 12).map { i ->
+            val c = StudioCfg()
+            c.layout = "analog"; c.an = i + 1; c.size = 170; c.fx = "solid"; c.color = pl.c1; c.c2 = pl.c2
+            P("${pl.name} ${i + 1}", "Agujas · ${pl.name}", c)
+        }
+        dig + ana
+    }
+
+    val all: List<P> = base + icons + collections
+    val catsAll: List<String> = cats + pals.map { "Paleta · ${it.name}" } + pals.map { "Agujas · ${it.name}" }
+    val total: Int get() = all.size
 
     fun same(a: StudioCfg, b: StudioCfg) = a.layout == b.layout && a.wght == b.wght && a.wdth == b.wdth && a.rond == b.rond &&
         a.fx == b.fx && a.font == b.font && a.ol == b.ol && a.color == b.color && a.ic == b.ic && a.cmode == b.cmode && a.c2 == b.c2 && a.xs == b.xs
 }
 
-/** Fondos generados (propios) y utilidades para poner un fondo en la pantalla de bloqueo. */
+/** Últimos estilos aplicados (se muestran en la página "Para ti"). */
+object StudioRecents {
+    fun list(ctx: Context): List<String> = (ctx.getSharedPreferences("lock", Context.MODE_PRIVATE).getString("recents", "") ?: "").split("\n").filter { it.isNotEmpty() }
+    fun add(ctx: Context, enc: String) {
+        val l = ArrayList(list(ctx))
+        l.remove(enc)
+        l.add(0, enc)
+        ctx.getSharedPreferences("lock", Context.MODE_PRIVATE).edit().putString("recents", l.take(11).joinToString("\n")).apply()
+    }
+}
+
+/** Fondos generados (propios) y utilidades para poner un fondo en bloqueo, inicio o ambos. */
 object StudioBg {
     private val pal = arrayOf(
         intArrayOf(0xFF0F3B3B.toInt(), 0xFF1B6E6E.toInt(), 0xFF15262B.toInt()),
@@ -190,26 +253,145 @@ object StudioBg {
         intArrayOf(0xFF42275A.toInt(), 0xFF734B6D.toInt(), 0xFFFF9A9E.toInt()),
         intArrayOf(0xFF141E30.toInt(), 0xFF243B55.toInt(), 0xFF0B0F18.toInt())
     )
-    val count = pal.size
+    private val styleNames = listOf("Degradado", "Malla", "Aurora", "Dunas", "Ondas", "Esferas")
+    val count = pal.size * styleNames.size
+
+    fun label(i: Int): String = styleNames[(i / pal.size) % styleNames.size]
+
+    private fun shift(c: Int, deg: Float): Int {
+        val h = FloatArray(3)
+        Color.colorToHSV(c, h)
+        h[0] = (h[0] + deg) % 360f
+        return Color.HSVToColor(h)
+    }
+
+    private fun mix(a: Int, b: Int, t: Float): Int = Color.rgb(
+        (Color.red(a) + (Color.red(b) - Color.red(a)) * t).toInt(), (Color.green(a) + (Color.green(b) - Color.green(a)) * t).toInt(), (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t).toInt())
 
     fun gen(i: Int, w: Int, h: Int): Bitmap {
-        val c = pal[i.coerceIn(0, pal.size - 1)]
+        val st = (i / pal.size) % styleNames.size
+        val base = pal[i % pal.size]
+        val c = IntArray(3) { shift(base[it], st * 23f) }
         val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val cv = Canvas(b)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.shader = LinearGradient(0f, 0f, w * 0.8f, h.toFloat(), c, floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
-        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
-        p.shader = RadialGradient(w * 0.2f, h * 0.25f, w * 0.7f, 0x55FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP)
-        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
-        p.shader = RadialGradient(w * 0.85f, h * 0.72f, w * 0.8f, (c[2] and 0x00FFFFFF) or 0x66000000, 0x00000000, Shader.TileMode.CLAMP)
-        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+        val rnd = java.util.Random(i * 7919L + 13)
+        when (st) {
+            0 -> {
+                p.shader = LinearGradient(0f, 0f, w * 0.8f, h.toFloat(), c, floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                p.shader = RadialGradient(w * 0.2f, h * 0.25f, w * 0.7f, 0x55FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                p.shader = RadialGradient(w * 0.85f, h * 0.72f, w * 0.8f, (c[2] and 0x00FFFFFF) or 0x66000000, 0x00000000, Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+            }
+            1 -> {
+                cv.drawColor(mix(c[0], Color.BLACK, 0.35f))
+                for (k in 0 until 5) {
+                    val x = w * (0.1f + 0.8f * rnd.nextFloat())
+                    val y = h * (0.1f + 0.8f * rnd.nextFloat())
+                    val col = if (k % 2 == 0) c[1] else c[2]
+                    p.shader = RadialGradient(x, y, w * (0.55f + 0.3f * rnd.nextFloat()), (col and 0x00FFFFFF) or 0xCC000000.toInt(), col and 0x00FFFFFF, Shader.TileMode.CLAMP)
+                    cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                }
+            }
+            2 -> {
+                p.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), mix(c[2], Color.BLACK, 0.7f), mix(c[0], Color.BLACK, 0.5f), Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                for (k in 0 until 7) {
+                    val path = Path()
+                    val y0 = h * (0.25f + 0.1f * k)
+                    val amp = h * (0.03f + 0.04f * rnd.nextFloat())
+                    val ph = rnd.nextFloat() * 6.28f
+                    path.moveTo(0f, y0)
+                    var x = 0f
+                    while (x <= w) { path.lineTo(x, y0 + amp * Math.sin(x / w * 5.5 + ph).toFloat()); x += w / 40f }
+                    p.shader = null
+                    p.style = Paint.Style.STROKE
+                    p.strokeWidth = h * 0.07f
+                    p.color = ((if (k % 2 == 0) c[1] else c[2]) and 0x00FFFFFF) or 0x38000000
+                    cv.drawPath(path, p)
+                }
+                p.style = Paint.Style.FILL
+            }
+            3 -> {
+                p.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), c[2], c[0], Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                p.shader = null
+                for (k in 0 until 5) {
+                    val path = Path()
+                    val y0 = h * (0.45f + 0.11f * k)
+                    val ph = rnd.nextFloat() * 6.28f
+                    path.moveTo(0f, h.toFloat())
+                    var x = 0f
+                    while (x <= w) { path.lineTo(x, y0 + h * 0.05f * Math.sin(x / w * 3.2 + ph).toFloat()); x += w / 40f }
+                    path.lineTo(w.toFloat(), h.toFloat()); path.close()
+                    p.color = mix(c[1], Color.BLACK, 0.12f + 0.16f * k)
+                    cv.drawPath(path, p)
+                }
+            }
+            4 -> {
+                p.shader = LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), c[0], c[2], Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                p.shader = null
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = w * 0.004f
+                for (k in 0 until 34) {
+                    val path = Path()
+                    val y0 = h * (0.08f + 0.03f * k)
+                    path.moveTo(0f, y0)
+                    var x = 0f
+                    while (x <= w) { path.lineTo(x, y0 + h * 0.05f * Math.sin(x / w * 6.0 + k * 0.3).toFloat() * (0.4f + k / 40f)); x += w / 50f }
+                    p.color = ((if (k % 3 == 0) c[1] else Color.WHITE) and 0x00FFFFFF) or 0x40000000
+                    cv.drawPath(path, p)
+                }
+                p.style = Paint.Style.FILL
+            }
+            else -> {
+                p.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), c[0], mix(c[2], Color.BLACK, 0.4f), Shader.TileMode.CLAMP)
+                cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                for (k in 0 until 7) {
+                    val x = w * rnd.nextFloat()
+                    val y = h * (0.1f + 0.8f * rnd.nextFloat())
+                    val r = w * (0.12f + 0.28f * rnd.nextFloat())
+                    val col = if (k % 2 == 0) c[1] else c[2]
+                    p.shader = RadialGradient(x - r * 0.3f, y - r * 0.3f, r * 1.2f, intArrayOf(mix(col, Color.WHITE, 0.45f), col, mix(col, Color.BLACK, 0.5f)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+                    cv.drawCircle(x, y, r, p)
+                }
+            }
+        }
         return b
     }
 
-    fun setLock(ctx: Activity, bmp: Bitmap): Boolean = try {
-        WallpaperManager.getInstance(ctx).setBitmap(bmp, null, true, WallpaperManager.FLAG_LOCK)
+    /** Aplica brillo (-50..50), saturación (0..200 %) y desenfoque (0..100) a un fondo. */
+    fun filter(src: Bitmap, blur: Int, bright: Int, sat: Int): Bitmap {
+        if (blur == 0 && bright == 0 && sat == 100) return src
+        var bmp = src
+        if (blur > 0) {
+            val k = 1f + blur / 100f * 26f
+            val sm = Bitmap.createScaledBitmap(src, maxOf(2, (src.width / k).toInt()), maxOf(2, (src.height / k).toInt()), true)
+            bmp = Bitmap.createScaledBitmap(sm, src.width, src.height, true)
+        }
+        val o = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
+        val cm = ColorMatrix()
+        cm.setSaturation(sat / 100f)
+        val f = 1f + bright / 100f
+        val bm = ColorMatrix(floatArrayOf(f, 0f, 0f, 0f, 0f, 0f, f, 0f, 0f, 0f, 0f, 0f, f, 0f, 0f, 0f, 0f, 0f, 1f, 0f))
+        cm.postConcat(bm)
+        val p = Paint(Paint.FILTER_BITMAP_FLAG)
+        p.colorFilter = ColorMatrixColorFilter(cm)
+        Canvas(o).drawBitmap(bmp, 0f, 0f, p)
+        return o
+    }
+
+    /** target: 0 = bloqueo, 1 = inicio, 2 = ambas. */
+    fun setWall(ctx: Context, bmp: Bitmap, target: Int): Boolean = try {
+        val flags = when (target) { 1 -> WallpaperManager.FLAG_SYSTEM; 2 -> WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK; else -> WallpaperManager.FLAG_LOCK }
+        WallpaperManager.getInstance(ctx).setBitmap(bmp, null, true, flags)
         true
     } catch (e: Throwable) { false }
+
+    fun setLock(ctx: Activity, bmp: Bitmap): Boolean = setWall(ctx, bmp, 0)
 }
 
 /** Utilidades visuales comunes del estilo HyperOS (botones tipo píldora, animaciones de pulsación). */
@@ -288,6 +470,20 @@ class HxIcon(ctx: Context, private val kind: Int) : View(ctx) {
             2 -> {
                 c.drawRoundRect(RectF(cx - r, cy - r * 0.55f, cx + r * 0.35f, cy + r), 4f * d, 4f * d, p)
                 c.drawRoundRect(RectF(cx - r * 0.35f, cy - r, cx + r, cy + r * 0.55f), 4f * d, 4f * d, p)
+            }
+            4 -> {
+                c.drawRoundRect(RectF(cx - r, cy - r, cx + r, cy + r), 5f * d, 5f * d, p)
+                p.style = Paint.Style.FILL
+                for (q in listOf(floatArrayOf(-0.45f, -0.45f), floatArrayOf(0f, 0f), floatArrayOf(0.45f, 0.45f), floatArrayOf(0.45f, -0.45f), floatArrayOf(-0.45f, 0.45f))) c.drawCircle(cx + q[0] * r, cy + q[1] * r, 1.9f * d, p)
+            }
+            5 -> {
+                val rr = RectF(cx - r * 0.8f, cy - r * 0.8f, cx + r * 0.8f, cy + r * 0.8f)
+                c.drawArc(rr, 200f, 250f, false, p)
+                val pa = Path()
+                pa.moveTo(cx - r * 0.85f, cy - r * 0.75f)
+                pa.lineTo(cx - r * 0.5f, cy - r * 0.7f)
+                pa.lineTo(cx - r * 0.7f, cy - r * 0.35f)
+                c.drawPath(pa, p)
             }
             else -> {
                 c.drawCircle(cx - r * 0.35f, cy, r * 0.62f, p)
@@ -402,8 +598,15 @@ class LockGalleryActivity : Activity() {
         root.addView(stage, FrameLayout.LayoutParams(-1, -1))
 
         val bg = Hx.bgBitmap(this)
-        for (c in StudioPresets.cats) {
-            val items = StudioPresets.all.filter { it.cat == c }
+        val byCat = StudioPresets.all.groupBy { it.cat }
+        val mine = ArrayList<StudioPresets.P>()
+        val cur = getSharedPreferences("lock", MODE_PRIVATE)
+        if (!cur.getString("sc_cfg", "").isNullOrEmpty()) mine.add(StudioPresets.P("Actual", "Para ti", StudioCfg.load(this)))
+        for ((i, e) in StudioRecents.list(this).withIndex()) mine.add(StudioPresets.P("Reciente ${i + 1}", "Para ti", StudioCfg.parse(e)))
+        val order = ArrayList<Pair<String, List<StudioPresets.P>>>()
+        if (mine.isNotEmpty()) order.add(Pair("Para ti", mine))
+        for (c0 in StudioPresets.catsAll) byCat[c0]?.let { order.add(Pair(c0, it)) }
+        for ((c, items) in order) {
             val v = FrameLayout(this)
             v.pivotX = sw / 2f
             v.pivotY = cy
@@ -676,6 +879,7 @@ class LockGalleryActivity : Activity() {
         busy = true
         val p = getSharedPreferences("lock", MODE_PRIVATE)
         p.edit().putString("sc_cfg", pr.cfg.enc()).putBoolean("sc_on", true).putBoolean("ic_on", false).apply()
+        StudioRecents.add(this, pr.cfg.enc())
         val pushed = StudioPush.push(p)
         Toast.makeText(this, if (pushed) "Aplicado: ${pr.name}" else "Guardado, pero el módulo LSPosed no está activo", Toast.LENGTH_LONG).show()
         root.animate().alpha(0f).scaleX(0.94f).scaleY(0.94f).setDuration(260).setInterpolator(DecelerateInterpolator())
