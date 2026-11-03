@@ -527,6 +527,12 @@ object StudioTile {
         screen.scaleX = k
         screen.scaleY = k
         card.addView(screen, FrameLayout.LayoutParams(sw, sh))
+        val shine = View(ctx)
+        shine.tag = "shine"
+        val shg = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x00FFFFFF, 0x55FFFFFF, 0x00FFFFFF))
+        shine.background = shg
+        shine.translationX = -pw.toFloat()
+        card.addView(shine, FrameLayout.LayoutParams((pw * 0.45f).toInt(), -1))
         val rad = radiusDp * dm.density
         card.clipToOutline = true
         card.outlineProvider = object : ViewOutlineProvider() {
@@ -597,11 +603,24 @@ class LockGalleryActivity : Activity() {
         val wallBg = ImageView(this)
         wallBg.scaleType = ImageView.ScaleType.CENTER_CROP
         wallBg.setImageBitmap(Hx.bgBitmap(this))
+        wallBg.scaleX = 1.12f; wallBg.scaleY = 1.12f
+        wallBgV = wallBg
         root.addView(wallBg, FrameLayout.LayoutParams(-1, -1))
         val darkBg = View(this)
         darkBg.setBackgroundColor(0xFF0A0B0F.toInt())
         darkBg.alpha = 0f
         root.addView(darkBg, FrameLayout.LayoutParams(-1, -1))
+        // resplandor ambiental con los colores de tu fondo, que "respira"
+        glowV = View(this)
+        val ac = avgColor(Hx.bgBitmap(this))
+        val gd = android.graphics.drawable.GradientDrawable()
+        gd.gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
+        gd.gradientRadius = sw * 0.95f
+        gd.setGradientCenter(0.5f, 0.52f)
+        gd.colors = intArrayOf((ac and 0xFFFFFF) or 0x77000000, (ac and 0xFFFFFF) or 0x22000000, 0x00000000)
+        glowV.background = gd
+        glowV.alpha = 0f
+        root.addView(glowV, FrameLayout.LayoutParams(-1, -1))
         stage = FrameLayout(this)
         root.addView(stage, FrameLayout.LayoutParams(-1, -1))
 
@@ -669,9 +688,86 @@ class LockGalleryActivity : Activity() {
         stage.animate().scaleX(1f).scaleY(1f).setDuration(700).setInterpolator(spring).start()
         darkBg.animate().alpha(0.96f).setDuration(520).setInterpolator(DecelerateInterpolator(1.5f)).start()
         topBar.animate().alpha(1f).setStartDelay(300).setDuration(320).start()
+        // entrada escalonada de las tarjetas, brillo y respiración del resplandor
+        val d0 = resources.displayMetrics.density
+        pages.getOrNull(0)?.let { p0 ->
+            for ((j, c) in p0.cards.withIndex()) {
+                val dj = Math.abs(j - p0.pos)
+                c.translationY = 110f * d0
+                c.animate().translationY(0f).setStartDelay((120 + dj * 90).toLong()).setDuration(620).setInterpolator(android.view.animation.OvershootInterpolator(1.6f)).start()
+            }
+            p0.cards.getOrNull(idx(p0))?.let { c -> c.postDelayed({ shine(c) }, 650) }
+        }
+        glowV.animate().alpha(1f).setDuration(900).withEndAction(object : Runnable {
+            var up = false
+            override fun run() {
+                if (!glowV.isAttachedToWindow) return
+                up = !up
+                glowV.animate().alpha(if (up) 0.62f else 1f).setDuration(3200).setInterpolator(android.view.animation.AccelerateDecelerateInterpolator()).withEndAction(this).start()
+            }
+        }).start()
+        nameTv.translationY = 24f * d0
+        nameTv.animate().translationY(0f).setStartDelay(420).setDuration(500).setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
     private var bgRef: Bitmap? = null
+    private lateinit var wallBgV: ImageView
+    private lateinit var glowV: View
+    private var tiltX = 0f
+    private var tiltY = 0f
+    private var baseY = Float.NaN
+    private var sensors: android.hardware.SensorManager? = null
+    private val sl = object : android.hardware.SensorEventListener {
+        override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
+        override fun onSensorChanged(e: android.hardware.SensorEvent) {
+            val gx = (-e.values[0] / 9.8f).coerceIn(-1f, 1f)
+            val gy = (e.values[1] / 9.8f).coerceIn(-1f, 1f)
+            if (baseY.isNaN()) baseY = gy
+            tiltX += (gx - tiltX) * 0.07f
+            tiltY += ((gy - baseY) - tiltY) * 0.07f
+            if (!::stage.isInitialized) return
+            val d = resources.displayMetrics.density
+            stage.cameraDistance = 14000f * d
+            stage.rotationY = tiltX * 5f
+            stage.rotationX = tiltY * 5f
+            wallBgV.translationX = -tiltX * 16f * d
+            wallBgV.translationY = tiltY * 16f * d
+            glowV.translationX = tiltX * 30f * d
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        try {
+            sensors = getSystemService(SENSOR_SERVICE) as android.hardware.SensorManager
+            val g = sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_GRAVITY) ?: sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER)
+            if (g != null) sensors?.registerListener(sl, g, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+        } catch (e: Throwable) { }
+    }
+
+    override fun onPause() {
+        try { sensors?.unregisterListener(sl) } catch (e: Throwable) { }
+        super.onPause()
+    }
+
+    private fun shine(c: FrameLayout) {
+        val sv = c.findViewWithTag<View>("shine") ?: return
+        sv.animate().cancel()
+        sv.translationX = -pw * 0.5f
+        sv.animate().translationX(pw * 1.05f).setStartDelay(120).setDuration(950).setInterpolator(android.view.animation.AccelerateDecelerateInterpolator()).start()
+    }
+
+    private fun avgColor(b: Bitmap): Int {
+        var r = 0L; var g = 0L; var bl = 0L; var n = 0L
+        val st = maxOf(1, b.width / 20)
+        var y = 0
+        while (y < b.height) { var x = 0; while (x < b.width) { val p = b.getPixel(x, y); r += Color.red(p); g += Color.green(p); bl += Color.blue(p); n++; x += st }; y += st }
+        if (n == 0L) return 0xFF4D7CFF.toInt()
+        val hsv = FloatArray(3)
+        Color.colorToHSV(Color.rgb((r / n).toInt(), (g / n).toInt(), (bl / n).toInt()), hsv)
+        hsv[1] = minOf(1f, hsv[1] * 1.3f + 0.15f); hsv[2] = maxOf(0.55f, hsv[2])
+        return Color.HSVToColor(hsv)
+    }
 
     private fun build(pg: Page) {
         if (pg.built) return
@@ -736,7 +832,10 @@ class LockGalleryActivity : Activity() {
         pg.items.getOrNull(i)?.let { nameTv.text = it.name }
         val key = cur() * 1000 + i
         if (key != lastIdx) {
-            if (lastIdx != -1) root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            if (lastIdx != -1) {
+                root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                pg.cards.getOrNull(i)?.let { shine(it) }
+            }
             lastIdx = key
         }
     }

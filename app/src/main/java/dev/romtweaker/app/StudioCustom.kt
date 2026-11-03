@@ -473,6 +473,47 @@ object StudioDesigns {
 {"type":"dots","x":50,"y":45,"n":60,"r":40,"size":0.7,"every":5,"es":1.5,"col":"p","a":0.7},
 {"type":"hand","which":"second","x":50,"y":45,"len":38,"w":0.8,"tail":6,"col":"s"},
 {"type":"text","text":"{HH}:{mm}","x":50,"y":45,"size":20,"wght":200,"wdth":70,"col":"p"},
-{"type":"text","text":"{sec}","x":50,"y":60,"size":5,"col":"s"}]}"""
+{"type":"text","text":"{sec}","x":50,"y":60,"size":5,"col":"s"}]}""",
+        "Neón" to """{"box":{"h":70},"elements":[
+{"type":"text","text":"{HH}:{mm}","x":50,"y":30,"size":40,"font":"syne","wght":800,"col":"p","glow":5},
+{"type":"shape","shape":"pill","x":50,"y":60,"w":60,"h":2.4,"col":"s","glow":4}]}""",
+        "Reloj de bolsillo" to """{"box":{"h":100},"elements":[
+{"type":"shape","shape":"ring","x":50,"y":50,"w":94,"h":94,"sw":1.2,"col":"p"},
+{"type":"shape","shape":"ring","x":50,"y":50,"w":84,"h":84,"sw":0.4,"col":"p","a":0.6},
+{"type":"numerals","x":50,"y":50,"r":35,"size":8,"set":"roman","font":"bodoni","col":"p"},
+{"type":"hand","which":"hour","x":50,"y":50,"len":22,"w":2.6,"tail":4,"tip":"arrow","tr":3.5,"col":"p"},
+{"type":"hand","which":"minute","x":50,"y":50,"len":32,"w":1.6,"tail":5,"tip":"arrow","tr":3,"col":"p"},
+{"type":"hand","which":"second","x":50,"y":50,"len":34,"w":0.6,"tail":8,"col":"s","hub":1}]}""",
+        "Columna" to """{"box":{"h":150},"elements":[
+{"type":"text","text":"{H1}","x":50,"y":22,"size":48,"font":"anton","col":"p"},
+{"type":"text","text":"{H2}","x":50,"y":58,"size":48,"font":"anton","col":"p"},
+{"type":"shape","shape":"rect","x":30,"y":82,"w":40,"h":1,"col":"s"},
+{"type":"text","text":"{m1}","x":50,"y":105,"size":48,"font":"anton","col":"s"},
+{"type":"text","text":"{m2}","x":50,"y":141,"size":48,"font":"anton","col":"s"}]}""",
+        "Marco" to """{"box":{"h":110},"elements":[
+{"type":"shape","shape":"rrect","x":50,"y":55,"w":92,"h":100,"r":10,"sw":1.2,"col":"p"},
+{"type":"text","text":"{dddd}","x":50,"y":16,"size":5.5,"track":2,"up":1,"col":"s"},
+{"type":"text","text":"{HH}","x":50,"y":42,"size":38,"font":"bodoni","wght":500,"col":"p"},
+{"type":"text","text":"{mm}","x":50,"y":76,"size":38,"font":"bodoni","wght":500,"col":"p","a":0.6},
+{"type":"text","text":"{d} {MMMM}","x":50,"y":98,"size":5.5,"track":1.5,"up":1,"col":"s"}]}""",
+        "Radar" to """{"box":{"h":100},"elements":[
+{"type":"shape","shape":"ring","x":50,"y":50,"w":90,"h":90,"sw":0.5,"col":"p","a":0.5},
+{"type":"shape","shape":"ring","x":50,"y":50,"w":60,"h":60,"sw":0.5,"col":"p","a":0.5},
+{"type":"shape","shape":"ring","x":50,"y":50,"w":30,"h":30,"sw":0.5,"col":"p","a":0.5},
+{"type":"shape","shape":"line","x":5,"y":50,"x2":95,"y2":50,"sw":0.4,"col":"p","a":0.4},
+{"type":"shape","shape":"line","x":50,"y":5,"x2":50,"y2":95,"sw":0.4,"col":"p","a":0.4},
+{"type":"hand","which":"second","x":50,"y":50,"len":45,"w":1,"col":"s","tip":"circle","tr":2},
+{"type":"text","text":"{HH}:{mm}","x":50,"y":50,"size":13,"font":"bebas","track":1,"col":"p"}]}""",
+        "Barras" to """{"box":{"h":110},"elements":[
+{"type":"text","text":"{HH}:{mm}","x":50,"y":24,"size":34,"wght":600,"wdth":80,"col":"p"},
+{"type":"text","text":"HORA","x":10,"y":50,"size":4,"align":"l","track":1.5,"col":"p","a":0.7},
+{"type":"shape","shape":"pill","x":10,"y":58,"w":80,"h":4,"col":"p","a":0.2},
+{"type":"shape","shape":"pill","x":10,"y":58,"w":80,"h":4,"val":"day","col":"p"},
+{"type":"text","text":"MINUTO","x":10,"y":72,"size":4,"align":"l","track":1.5,"col":"p","a":0.7},
+{"type":"shape","shape":"pill","x":10,"y":80,"w":80,"h":4,"col":"s","a":0.2},
+{"type":"shape","shape":"pill","x":10,"y":80,"w":80,"h":4,"val":"min","col":"s"},
+{"type":"text","text":"BATERÍA {bat}%","x":10,"y":94,"size":4,"align":"l","track":1.5,"col":"p","a":0.7},
+{"type":"shape","shape":"pill","x":10,"y":102,"w":80,"h":4,"col":"p","a":0.2},
+{"type":"shape","shape":"pill","x":10,"y":102,"w":80,"h":4,"val":"bat","col":"p"}]}"""
     )
 }
