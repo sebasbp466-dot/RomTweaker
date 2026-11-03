@@ -65,6 +65,8 @@ class ClockEditActivity : Activity() {
     private val tabViews = ArrayList<TextView>()
     private val rings = ArrayList<Pair<View, StudioCfg>>()
     private var tab = 0
+    private lateinit var segFrame: FrameLayout
+    private lateinit var knob: View
     private var open = false
     private var rad = 0f
     private var sMin = 0.6f
@@ -185,11 +187,14 @@ class ClockEditActivity : Activity() {
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
         hintTv = TextView(this)
-        hintTv.text = "Zoom y desplazamiento con dos dedos"
-        hintTv.setTextColor(0xB3FFFFFF.toInt())
-        hintTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
-        titleCol.addView(hintTv)
-        topBar.addView(titleCol, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        hintTv.text = "Pellizca con dos dedos para escalar y mover la imagen"
+        hintTv.setTextColor(0xCCFFFFFF.toInt())
+        hintTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+        hintTv.gravity = Gravity.CENTER
+        stage.addView(hintTv, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).also { it.topMargin = dp(12f); it.leftMargin = dp(18f); it.rightMargin = dp(18f) })
+        title.typeface = Typeface.DEFAULT
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        topBar.addView(titleCol, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).also { it.topMargin = dp(38f) })
         val tl = FrameLayout.LayoutParams(-1, -2, Gravity.TOP)
         tl.setMargins(dp(16f), dp(30f), dp(16f), 0)
         root.addView(topBar, tl)
@@ -256,7 +261,22 @@ class ClockEditActivity : Activity() {
         val sgd = GradientDrawable()
         sgd.cornerRadius = dp(40f).toFloat()
         sgd.setColor(0x14000000)
-        seg.background = sgd
+        segFrame = FrameLayout(this)
+        segFrame.background = sgd
+        knob = View(this)
+        val kg = GradientDrawable()
+        kg.cornerRadius = dp(40f).toFloat()
+        kg.setColor(0xFFFFFFFF.toInt())
+        knob.background = kg
+        segFrame.addView(knob, FrameLayout.LayoutParams(0, -1).also { it.setMargins(dp(3f), dp(3f), 0, dp(3f)) })
+        segFrame.addOnLayoutChangeListener { _, l, _, r, _, ol, _, orr, _ ->
+            if (r - l != orr - ol) {
+                val kw = (r - l - dp(6f)) / 4
+                (knob.layoutParams as FrameLayout.LayoutParams).width = kw
+                knob.requestLayout()
+                knob.translationX = tab * kw.toFloat()
+            }
+        }
         seg.setPadding(dp(3f), dp(3f), dp(3f), dp(3f))
         for ((i, nm) in listOf("Reloj", "Fuente", "Color", "Fondo").withIndex()) {
             val t = TextView(this)
@@ -264,13 +284,14 @@ class ClockEditActivity : Activity() {
             t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
             t.gravity = Gravity.CENTER
             t.setPadding(0, dp(7f), 0, dp(7f))
-            t.setOnClickListener { tab = i; refreshTabs(); fillBody() }
+            t.setOnClickListener { switchTab(i) }
             seg.addView(t, LinearLayout.LayoutParams(0, -2, 1f))
             tabViews.add(t)
         }
         val slp = LinearLayout.LayoutParams(0, -2, 1f)
         slp.leftMargin = dp(12f)
-        head.addView(seg, slp)
+        segFrame.addView(seg, FrameLayout.LayoutParams(-1, -2))
+        head.addView(segFrame, slp)
         panel.addView(head, m.lp(m.MP, m.WC, 0, 0, 0, 10))
         body = LinearLayout(this)
         body.orientation = LinearLayout.VERTICAL
@@ -278,7 +299,7 @@ class ClockEditActivity : Activity() {
         bodySv = sv
         sv.isVerticalScrollBarEnabled = false
         sv.addView(body)
-        panel.addView(sv, LinearLayout.LayoutParams(-1, (sh * 0.34f).toInt()))
+        panel.addView(sv, LinearLayout.LayoutParams(-1, (sh * 0.59f - dp(84f)).toInt()))
         val pl = FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM)
         pl.setMargins(0, 0, 0, 0)
         root.addView(panel, pl)
@@ -303,10 +324,11 @@ class ClockEditActivity : Activity() {
         if (fromGallery) { applyShrink() } else { fullP = 1f; applyShrink(); animFull(0f, null) }
         topBar.alpha = 0f
         topBar.translationY = -dp(14f).toFloat()
-        topBar.animate().alpha(1f).translationY(0f).setStartDelay(120).setDuration(380).setInterpolator(DecelerateInterpolator(1.6f)).start()
+        topBar.animate().alpha(1f).translationY(0f).setStartDelay(200).setDuration(200).setInterpolator(DecelerateInterpolator(1.6f)).start()
         bottomBar.alpha = 0f
         bottomBar.translationY = dp(24f).toFloat()
         bottomBar.animate().alpha(1f).translationY(0f).setStartDelay(160).setDuration(420).setInterpolator(DecelerateInterpolator(1.6f)).start()
+        if (fromGallery) { clock.alpha = 0f; clock.animate().alpha(1f).setStartDelay(60).setDuration(240).start() }
         sg.x = 0.93f; sg.t = 1f; kick()
         hintTv.postDelayed({ hintTv.animate().alpha(0.55f).setDuration(600).start() }, 4000)
     }
@@ -515,17 +537,32 @@ class ClockEditActivity : Activity() {
             val sel = i == tab
             t.setTextColor(if (sel) INK else INKD)
             t.typeface = if (sel) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-            val g = GradientDrawable()
-            g.cornerRadius = dp(40f).toFloat()
-            g.setColor(if (sel) 0xFFFFFFFF.toInt() else Color.TRANSPARENT)
-            t.background = g
+            t.background = null
         }
+        if (::knob.isInitialized && segFrame.width > 0) {
+            val kw = ((segFrame.width - dp(6f)) / 4).toFloat()
+            knob.animate().translationX(tab * kw).setDuration(200).setInterpolator(DecelerateInterpolator(1.8f)).start()
+        }
+    }
+
+    private fun switchTab(i: Int) {
+        if (i == tab) return
+        val dir = if (i > tab) 1 else -1
+        tab = i
+        refreshTabs()
+        body.animate().cancel()
+        val off = dp(36f).toFloat()
+        body.animate().translationX(-dir * off).alpha(0f).setDuration(90).withEndAction {
+            fillBody()
+            body.translationX = dir * off
+            body.animate().translationX(0f).alpha(1f).setDuration(190).setInterpolator(DecelerateInterpolator(1.8f)).start()
+        }.start()
     }
 
     private fun animShrink(to: Float) {
         shrinkAnim?.cancel()
         val a = ValueAnimator.ofFloat(shrink, to)
-        a.duration = 460
+        a.duration = 190
         a.interpolator = DecelerateInterpolator(1.8f)
         a.addUpdateListener { shrink = it.animatedValue as Float; applyShrink() }
         shrinkAnim = a
@@ -533,11 +570,11 @@ class ClockEditActivity : Activity() {
     }
 
     private fun applyShrink() {
-        val sOpen = minOf(sMin, baseS)
         val sBase = baseS + (1f - baseS) * fullP
+        val sOpen = sBase
         val s = sBase + shrink * (sOpen - sBase)
         val ty0 = (sh - sh * sBase) / 2f
-        val tyOpen = dp(70f).toFloat()
+        val tyOpen = sh * 0.06f
         stage.pivotX = sw / 2f
         stage.pivotY = 0f
         stage.scaleX = s
@@ -565,17 +602,17 @@ class ClockEditActivity : Activity() {
         panel.visibility = View.VISIBLE
         panel.post {
             panel.translationY = panel.height.toFloat()
-            panel.animate().translationY(0f).setDuration(440).setInterpolator(DecelerateInterpolator(1.9f)).start()
+            panel.animate().translationY(0f).setDuration(190).setInterpolator(DecelerateInterpolator(1.8f)).start()
         }
         animShrink(1f)
-        bottomBar.animate().alpha(0f).setDuration(160).start()
-        topBar.animate().alpha(0f).setDuration(200).start()
+        bottomBar.animate().alpha(0f).setDuration(110).start()
+        topBar.animate().alpha(0f).setDuration(110).start()
     }
 
     private fun closePanel() {
         if (!open) return
         open = false
-        panel.animate().translationY(panel.height.toFloat()).setDuration(300).setInterpolator(DecelerateInterpolator())
+        panel.animate().translationY(panel.height.toFloat()).setDuration(200).setInterpolator(DecelerateInterpolator())
             .withEndAction { if (!open) panel.visibility = View.INVISIBLE }.start()
         animShrink(0f)
         bottomBar.animate().alpha(1f).setStartDelay(120).setDuration(300).start()
@@ -648,12 +685,23 @@ class ClockEditActivity : Activity() {
     }
 
     private fun refreshRings() {
-        for ((v, c) in rings) {
+        fun ring(v: View, a: Float) {
             val g = GradientDrawable()
             g.cornerRadius = dp(14f).toFloat()
             g.setColor(Color.TRANSPARENT)
-            g.setStroke(dp(3f), if (StudioPresets.same(cfg, c)) Hx.BLUE else Color.TRANSPARENT)
+            g.setStroke(dp(3f), (Hx.BLUE and 0xFFFFFF) or ((a.coerceIn(0f, 1f) * 255).toInt() shl 24))
             v.foreground = g
+        }
+        for ((v, c) in rings) {
+            val sel = StudioPresets.same(cfg, c)
+            val prev = v.tag as? Boolean
+            if (prev == sel) continue
+            v.tag = sel
+            if (prev == null) { ring(v, if (sel) 1f else 0f); continue }
+            val an = ValueAnimator.ofFloat(0f, 1f)
+            an.duration = 170
+            an.addUpdateListener { val t = it.animatedValue as Float; ring(v, if (sel) t else 1f - t) }
+            an.start()
         }
     }
 

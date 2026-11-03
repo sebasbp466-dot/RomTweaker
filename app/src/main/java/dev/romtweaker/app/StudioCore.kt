@@ -33,6 +33,14 @@ import java.io.File
 import java.util.Calendar
 
 /** Configuración del reloj del editor estilo HyperOS (se guarda como texto clave=valor). */
+object StudioTime {
+    fun now(sample: Boolean): java.util.Calendar {
+        val c = java.util.Calendar.getInstance()
+        if (sample) { c.set(2025, java.util.Calendar.APRIL, 6, 5, 36, 0) }
+        return c
+    }
+}
+
 class StudioCfg {
     var layout = "stack"
     var wght = 500
@@ -345,6 +353,7 @@ object StudioFx {
 
 /** Dibuja solo los dígitos (con el efecto del shader); la fecha va aparte para que no se vea afectada. */
 class DigitsView(ctx: Context) : View(ctx) {
+    var sample = false
     var cfg = StudioCfg()
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private var hh = "00"
@@ -356,7 +365,7 @@ class DigitsView(ctx: Context) : View(ctx) {
     private var wk = ""
 
     private fun words(): Array<String> {
-        val cal = Calendar.getInstance()
+        val cal = StudioTime.now(sample)
         var h = cal.get(Calendar.HOUR_OF_DAY)
         var m = ((cal.get(Calendar.MINUTE) + 2) / 5) * 5
         if (m >= 60) { m = 0; h += 1 }
@@ -441,7 +450,7 @@ class DigitsView(ctx: Context) : View(ctx) {
     }
 
     fun refresh() {
-        val cal = Calendar.getInstance()
+        val cal = StudioTime.now(sample)
         var hr = cal.get(Calendar.HOUR_OF_DAY)
         if (!android.text.format.DateFormat.is24HourFormat(context)) { hr %= 12; if (hr == 0) hr = 12 }
         val a = String.format("%02d", hr)
@@ -565,6 +574,7 @@ object StudioUnclip {
 
 /** Reloj de agujas con 12 estilos. */
 class AnalogView(ctx: Context) : View(ctx) {
+    var sample = false
     var cfg = StudioCfg()
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private var hr = 0f
@@ -575,7 +585,7 @@ class AnalogView(ctx: Context) : View(ctx) {
     private fun dia(): Float = cfg.size * resources.displayMetrics.density * cfg.sc / 100f * 1.15f
 
     fun refresh() {
-        val c = Calendar.getInstance()
+        val c = StudioTime.now(sample)
         val h = c.get(Calendar.HOUR)
         val m = c.get(Calendar.MINUTE)
         val a = (h + m / 60f) * 30f
@@ -751,6 +761,9 @@ class DepthView(ctx: Context) : View(ctx) {
 
 /** Reloj completo: fecha encima + dígitos (o reloj de Iconify) + firma. Se usa igual en el editor y dentro de SystemUI. */
 class StudioClock(ctx: Context) : LinearLayout(ctx) {
+    /** Hora de ejemplo (05:36, "6 abr") como en la galería de HyperOS. */
+    var sample = false
+        set(v) { field = v; digits.sample = v; analog.sample = v; custom.sample = v; refreshDate() }
     private val dateTv = TextView(ctx)
     private val sigTv = TextView(ctx)
     val digits = DigitsView(ctx)
@@ -793,7 +806,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
 
     fun refreshDate() {
         val f = when (cfg.datef) { 1 -> "d 'de' MMMM"; 2 -> "EEEE d"; 3 -> "d/M/yyyy"; 4 -> "EEEE"; 5 -> "d MMM"; else -> "EEE, d 'de' MMM" }
-        dateTv.text = cap(android.text.format.DateFormat.format(f, Calendar.getInstance()).toString())
+        dateTv.text = cap(android.text.format.DateFormat.format(f, StudioTime.now(sample)).toString())
     }
 
     private fun refreshSig() {

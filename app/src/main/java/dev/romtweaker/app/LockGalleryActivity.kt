@@ -518,6 +518,7 @@ object StudioTile {
         card.addView(dim, FrameLayout.LayoutParams(-1, -1))
         val screen = FrameLayout(ctx)
         val clk = StudioClock(ctx)
+        clk.sample = true
         clk.applyConfig(cfg)
         val clp = FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
         clp.topMargin = (cfg.top * dm.density).toInt()
@@ -608,7 +609,6 @@ class LockGalleryActivity : Activity() {
         val wallBg = ImageView(this)
         wallBg.scaleType = ImageView.ScaleType.CENTER_CROP
         wallBg.setImageBitmap(Hx.bgBitmap(this))
-        wallBg.scaleX = 1.12f; wallBg.scaleY = 1.12f
         wallBgV = wallBg
         root.addView(wallBg, FrameLayout.LayoutParams(-1, -1))
         val darkBg = View(this)
@@ -625,7 +625,6 @@ class LockGalleryActivity : Activity() {
         gd.colors = intArrayOf((ac and 0xFFFFFF) or 0x77000000, (ac and 0xFFFFFF) or 0x22000000, 0x00000000)
         glowV.background = gd
         glowV.alpha = 0f
-        root.addView(glowV, FrameLayout.LayoutParams(-1, -1))
         stage = FrameLayout(this)
         root.addView(stage, FrameLayout.LayoutParams(-1, -1))
 
@@ -680,7 +679,7 @@ class LockGalleryActivity : Activity() {
         tl.setMargins(Hx.dp(this, 16f), Hx.dp(this, 30f), Hx.dp(this, 16f), 0)
         root.addView(topBar, tl)
 
-        stage.setOnTouchListener { _, e -> touchTilt(e); touch(e); true }
+        stage.setOnTouchListener { _, e -> touch(e); true }
         setContentView(root)
 
         // Entrada: la pantalla de bloqueo "se aleja" y aparece la galería
@@ -700,10 +699,7 @@ class LockGalleryActivity : Activity() {
         pages.getOrNull(0)?.let { p0 ->
             for ((j, c) in p0.cards.withIndex()) {
                 val dj = Math.abs(j - p0.pos)
-                c.translationY = 110f * d0
-                c.animate().translationY(0f).setStartDelay((120 + dj * 90).toLong()).setDuration(620).setInterpolator(android.view.animation.OvershootInterpolator(1.6f)).start()
             }
-            p0.cards.getOrNull(idx(p0))?.let { c -> c.postDelayed({ shine(c) }, 650) }
         }
         glowV.animate().alpha(1f).setDuration(900).withEndAction(object : Runnable {
             var up = false
@@ -771,7 +767,7 @@ class LockGalleryActivity : Activity() {
         try {
             sensors = getSystemService(SENSOR_SERVICE) as android.hardware.SensorManager
             val g = sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_GRAVITY)
-            if (g != null) sensors?.registerListener(sl, g, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+            if (g != null) null
         } catch (e: Throwable) { }
     }
 
@@ -836,6 +832,7 @@ class LockGalleryActivity : Activity() {
                 pg.view.alpha = 1f - k
             }
             pg.title.alpha = (1f - ad * 1.7f).coerceIn(0f, 1f)
+            pg.title.translationY = d.coerceIn(-1f, 1f) * Hx.dp(this, 30f)
             val n = pg.items.size
             for ((j, c) in pg.cards.withIndex()) {
                 var dj = j - pg.pos
@@ -844,13 +841,12 @@ class LockGalleryActivity : Activity() {
                 if (a2 > 2.3f) { c.visibility = View.INVISIBLE; continue }
                 c.visibility = View.VISIBLE
                 val sg = if (dj < 0) -1f else 1f
-                c.translationX = if (a2 <= 1f) dj * hstep else sg * (hstep + (a2 - 1f) * hstep * 0.7f)
+                c.translationX = if (a2 <= 1f) dj * hstep else sg * (hstep + (a2 - 1f) * pw * 0.32f)
                 val sc = if (a2 <= 1f) 1f - 0.40f * a2 else 0.60f - 0.08f * (a2 - 1f)
                 c.scaleX = sc
                 c.scaleY = sc
-                c.alpha = 1f - 0.45f * min(1f, a2)
-                c.cameraDistance = 9000f * resources.displayMetrics.density
-                c.rotationY = (-dj * 22f).coerceIn(-34f, 34f)
+                c.alpha = 1f
+                c.rotationY = 0f
                 c.translationZ = 10f * (1f - min(1f, a2))
             }
         }
@@ -866,7 +862,6 @@ class LockGalleryActivity : Activity() {
         if (key != lastIdx) {
             if (lastIdx != -1) {
                 root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                pg.cards.getOrNull(i)?.let { shine(it) }
             }
             lastIdx = key
         }
@@ -875,8 +870,8 @@ class LockGalleryActivity : Activity() {
     private fun animTo(from: Float, to: Float, set: (Float) -> Unit) {
         anim?.cancel()
         val a = ValueAnimator.ofFloat(from, to)
-        a.duration = 360
-        a.interpolator = DecelerateInterpolator(1.8f)
+        a.duration = 320
+        a.interpolator = android.view.animation.OvershootInterpolator(0.9f)
         a.addUpdateListener { set(it.animatedValue as Float); layoutAll() }
         anim = a
         a.start()
@@ -963,7 +958,7 @@ class LockGalleryActivity : Activity() {
         busy = true
         anim?.cancel()
         for (p in pages) if (p !== pg) p.view.animate().alpha(0f).setDuration(220).start()
-        for ((k, c) in pg.cards.withIndex()) if (k != j) c.animate().alpha(0f).translationXBy(if (k < j) -pw * 0.3f else pw * 0.3f).setDuration(260).start()
+        for ((k, c) in pg.cards.withIndex()) if (k != j) c.animate().alpha(0f).translationXBy(pw * 1.1f).setDuration(260).setInterpolator(DecelerateInterpolator(1.6f)).start()
         pg.title.animate().alpha(0f).setDuration(180).start()
         nameTv.animate().alpha(0f).setDuration(150).start()
         custBtn.animate().alpha(0f).setDuration(150).start()
@@ -971,7 +966,7 @@ class LockGalleryActivity : Activity() {
         card.translationZ = 30f
         val k = Hx.CARD * sw / pw.toFloat()
         card.animate().scaleX(k).scaleY(k).translationY(sh / 2f - cy)
-            .setDuration(420).setInterpolator(DecelerateInterpolator(1.8f))
+            .setDuration(270).setInterpolator(android.view.animation.OvershootInterpolator(0.9f))
             .withEndAction {
                 val i = Intent(this, ClockEditActivity::class.java)
                 i.putExtra("cfg", pr.cfg.enc())
@@ -988,7 +983,7 @@ class LockGalleryActivity : Activity() {
         for (p in pages) p.view.animate().alpha(1f).setDuration(260).start()
         for ((k, c) in pg.cards.withIndex()) {
             c.animate().alpha(1f).translationY(0f).setDuration(300).setInterpolator(DecelerateInterpolator(1.5f)).start()
-            if (k == j) c.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(380).setInterpolator(DecelerateInterpolator(1.6f)).start()
+            if (k == j) c.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(320).setInterpolator(android.view.animation.OvershootInterpolator(0.9f)).start()
         }
         layoutAll()
         pg.title.animate().alpha(1f).setDuration(260).start()

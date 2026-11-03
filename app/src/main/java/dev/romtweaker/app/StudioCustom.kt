@@ -72,6 +72,7 @@ object StudioSticker {
 
 /** Dibuja un reloj descrito por un JSON (el motor de "diseños"): textos con tokens, formas, agujas, marcas, anillos y pegatina. */
 class CustomClockView(ctx: Context) : View(ctx) {
+    var sample = false
     var cfg = StudioCfg()
     private var els: JSONArray? = null
     private var boxH = 100f
@@ -119,7 +120,7 @@ class CustomClockView(ctx: Context) : View(ctx) {
     }
 
     fun refresh() {
-        val c = Calendar.getInstance()
+        val c = StudioTime.now(sample)
         val h = c.get(Calendar.HOUR)
         val m = c.get(Calendar.MINUTE)
         val s = c.get(Calendar.SECOND)
@@ -151,7 +152,7 @@ class CustomClockView(ctx: Context) : View(ctx) {
 
     private fun tok(t: String): String {
         if (!t.contains('{')) return t
-        val cal = Calendar.getInstance()
+        val cal = StudioTime.now(sample)
         var H = cal.get(Calendar.HOUR_OF_DAY)
         val is24 = android.text.format.DateFormat.is24HourFormat(context)
         if (!is24) { H %= 12; if (H == 0) H = 12 }
@@ -169,10 +170,10 @@ class CustomClockView(ctx: Context) : View(ctx) {
 
     private fun frac(v: String?): Float = when (v) {
         "bat" -> bat / 100f
-        "min" -> Calendar.getInstance().get(Calendar.MINUTE) / 60f
-        "hour" -> (Calendar.getInstance().get(Calendar.HOUR) + Calendar.getInstance().get(Calendar.MINUTE) / 60f) / 12f
-        "sec" -> Calendar.getInstance().get(Calendar.SECOND) / 60f
-        "day" -> (Calendar.getInstance().get(Calendar.HOUR_OF_DAY) * 60 + Calendar.getInstance().get(Calendar.MINUTE)) / 1440f
+        "min" -> StudioTime.now(sample).get(Calendar.MINUTE) / 60f
+        "hour" -> (StudioTime.now(sample).get(Calendar.HOUR) + StudioTime.now(sample).get(Calendar.MINUTE) / 60f) / 12f
+        "sec" -> StudioTime.now(sample).get(Calendar.SECOND) / 60f
+        "day" -> (StudioTime.now(sample).get(Calendar.HOUR_OF_DAY) * 60 + StudioTime.now(sample).get(Calendar.MINUTE)) / 1440f
         else -> 1f
     }
 
