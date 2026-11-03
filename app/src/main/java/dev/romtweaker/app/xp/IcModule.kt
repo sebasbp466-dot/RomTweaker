@@ -251,8 +251,10 @@ object IcModule {
         val hd = prefs?.getBoolean("ic_date", true) ?: true
         val scCfg = if (sc) (prefs?.getString("sc_cfg", "") ?: "") else ""
         val dmask = if (sc) (prefs?.getString("depth_mask", "") ?: "") else ""
+        val stk = if (sc) (prefs?.getString("sticker", "") ?: "") else ""
+        if (stk != dev.romtweaker.app.StudioSticker.b64) dev.romtweaker.app.StudioSticker.b64 = stk
         val wid = try { android.app.WallpaperManager.getInstance(v.context).getWallpaperId(android.app.WallpaperManager.FLAG_LOCK) } catch (e: Throwable) { 0 }
-        val key = if (sc) "S|$scCfg|${dmask.length}|$wid" else "$n|$top|$bot|$scl|$hd"
+        val key = if (sc) "S|$scCfg|${dmask.length}|${stk.length}|$wid" else "$n|$top|$bot|$scl|$hd"
         val rr = root(v)
         val healthy = cur != null && cur.isAttachedToWindow && key == contKey && cur.parent === rr && cur.childCount > 0 && cur.visibility == View.VISIBLE &&
             (cur.width > 0 || !cur.isLaidOut) && (cur.getChildAt(0)?.let { it.width > 0 || !it.isLaidOut } ?: false)

@@ -60,8 +60,9 @@ class StudioCfg {
     var datef = 0       // formato de fecha
     var an = 1          // estilo del reloj de agujas (layout analog)
     var depth = 0       // 1 = sujeto del fondo por delante del reloj
+    var cs = ""         // diseño personalizado (JSON) para layout "custom"
 
-    fun enc(): String = "layout=$layout;wght=$wght;wdth=$wdth;rond=$rond;slnt=$slnt;fx=$fx;tr=$tr;color=$color;size=$size;top=$top;cx=$cx;sc=$sc;date=${if (date) 1 else 0};font=$font;ol=$ol;ic=$ic;c2=$c2;glow=$glow;shadow=$shadow;cmode=$cmode;xs=$xs;gap=$gap;datef=$datef;an=$an;depth=$depth;sig=" + java.net.URLEncoder.encode(sig, "UTF-8")
+    fun enc(): String = "layout=$layout;wght=$wght;wdth=$wdth;rond=$rond;slnt=$slnt;fx=$fx;tr=$tr;color=$color;size=$size;top=$top;cx=$cx;sc=$sc;date=${if (date) 1 else 0};font=$font;ol=$ol;ic=$ic;c2=$c2;glow=$glow;shadow=$shadow;cmode=$cmode;xs=$xs;gap=$gap;datef=$datef;an=$an;depth=$depth;cs=" + java.net.URLEncoder.encode(cs, "UTF-8") + ";sig=" + java.net.URLEncoder.encode(sig, "UTF-8")
     fun copy(): StudioCfg = parse(enc())
 
     fun assign(p: StudioCfg) { styleFrom(p); top = p.top; cx = p.cx; sc = p.sc; date = p.date; sig = p.sig; datef = p.datef; depth = p.depth }
@@ -69,7 +70,7 @@ class StudioCfg {
     /** Copia solo el estilo (no la posición, escala, firma ni formato de fecha). */
     fun styleFrom(p: StudioCfg) {
         layout = p.layout; wght = p.wght; wdth = p.wdth; rond = p.rond; slnt = p.slnt; fx = p.fx; tr = p.tr; color = p.color
-        size = p.size; font = p.font; ol = p.ol; ic = p.ic; c2 = p.c2; glow = p.glow; shadow = p.shadow; cmode = p.cmode; xs = p.xs; gap = p.gap; an = p.an
+        size = p.size; font = p.font; ol = p.ol; ic = p.ic; c2 = p.c2; glow = p.glow; shadow = p.shadow; cmode = p.cmode; xs = p.xs; gap = p.gap; an = p.an; cs = p.cs
     }
 
     companion object {
@@ -108,6 +109,7 @@ class StudioCfg {
                         "datef" -> c.datef = v.toInt()
                         "an" -> c.an = v.toInt()
                         "depth" -> c.depth = v.toInt()
+                        "cs" -> c.cs = java.net.URLDecoder.decode(v, "UTF-8")
                         "sig" -> c.sig = java.net.URLDecoder.decode(v, "UTF-8")
                     }
                 } catch (e: Throwable) { }
@@ -726,6 +728,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
     private val sigTv = TextView(ctx)
     val digits = DigitsView(ctx)
     val analog = AnalogView(ctx)
+    val custom = CustomClockView(ctx)
     private val holder = FrameLayout(ctx)
     var cfg = StudioCfg()
     private var rcv: BroadcastReceiver? = null
@@ -751,6 +754,8 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         addView(digits, LayoutParams(-2, -2))
         addView(analog, LayoutParams(-2, -2))
         analog.visibility = GONE
+        addView(custom, LayoutParams(-2, -2))
+        custom.visibility = GONE
         addView(holder, LayoutParams(-2, -2))
         addView(sigTv, LayoutParams(-2, -2))
         holder.visibility = GONE
@@ -815,12 +820,16 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         digits.cfg = c
         val cols = StudioColor.resolve(context, c)
         val ic = c.ic > 0
-        val an = !ic && c.layout == "analog"
+        val cu = !ic && c.layout == "custom" && c.cs.isNotEmpty()
+        val an = !ic && !cu && c.layout == "analog"
         analog.cfg = c
-        digits.visibility = if (ic || an) GONE else VISIBLE
+        custom.cfg = c
+        custom.setSpec(c.cs)
+        custom.visibility = if (cu) VISIBLE else GONE
+        digits.visibility = if (ic || an || cu) GONE else VISIBLE
         analog.visibility = if (an) VISIBLE else GONE
         holder.visibility = if (ic) VISIBLE else GONE
-        dateTv.visibility = if (c.date && !ic) VISIBLE else GONE
+        dateTv.visibility = if (c.date && !ic && !cu) VISIBLE else GONE
         dateTv.setTextColor(cols.first)
         dateTv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, (c.size * c.sc / 100f * 0.10f).coerceIn(11f, 44f))
         try { dateTv.fontVariationSettings = "'wght' 500" } catch (e: Throwable) { }
@@ -837,6 +846,11 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
             holder.scaleY = k
             if (c.cmode != 5 && holder.childCount > 0) tintAll(holder, cols.first, c.glow / 100f * 18f * resources.displayMetrics.density)
             StudioFx.apply(holder, c, cols.first, cols.second)
+        } else if (cu) {
+            custom.refresh()
+            custom.requestLayout()
+            custom.invalidate()
+            custom.applyFx()
         } else if (an) {
             analog.refresh()
             analog.requestLayout()
@@ -871,6 +885,9 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
             val k = holder.scaleX
             r.set(holder.left + holder.width * (1 - k) / 2f, holder.top.toFloat(), holder.right - holder.width * (1 - k) / 2f, holder.top + holder.height * k)
             r.inset(-6 * d, -6 * d)
+        } else if (custom.visibility == VISIBLE) {
+            val i = custom.inner()
+            r.set(custom.left + i.left, custom.top + i.top, custom.left + i.right, custom.top + i.bottom)
         } else if (analog.visibility == VISIBLE) {
             val i = analog.inner()
             r.set(analog.left + i.left, analog.top + i.top, analog.left + i.right, analog.top + i.bottom)
@@ -911,7 +928,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         val r = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, i: Intent?) { refreshDate(); digits.refresh(); analog.refresh() }
+            override fun onReceive(c: Context?, i: Intent?) { refreshDate(); digits.refresh(); analog.refresh(); custom.refresh() }
         }
         rcv = r
         val f = IntentFilter()
@@ -920,7 +937,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED)
         try { context.registerReceiver(r, f) } catch (e: Throwable) { }
         refreshDate()
-        if (cfg.ic > 0 || cfg.layout == "analog") applyConfig(cfg) else { digits.refresh(); digits.applyFx() }
+        if (cfg.ic > 0 || cfg.layout == "analog" || cfg.layout == "custom") applyConfig(cfg) else { digits.refresh(); digits.applyFx() }
     }
 
     override fun onDetachedFromWindow() {

@@ -26,6 +26,7 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
         fun curCfg(): StudioCfg
         fun wallBmp(): Bitmap?
         fun useWall(b: Bitmap)
+        fun useSticker(b64: String)
         fun closeSheet()
     }
 
@@ -108,15 +109,18 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
         seg.orientation = LinearLayout.HORIZONTAL
         seg.background = rounded(0x14000000, 40f)
         seg.setPadding(dp(3f), dp(3f), dp(3f), dp(3f))
-        for ((i, n) in listOf("Reloj", "Para mi fondo", "Fondo").withIndex()) {
+        for ((i, n) in listOf("✦ Diseño nuevo", "Estilo", "Retocar", "Para mi fondo", "Fondo").withIndex()) {
             val t = txt(n, 13f, ink)
             t.gravity = Gravity.CENTER
-            t.setPadding(0, dp(8f), 0, dp(8f))
+            t.setPadding(dp(14f), dp(8f), dp(14f), dp(8f))
             t.setOnClickListener { mode = i; refreshMode() }
-            seg.addView(t, LinearLayout.LayoutParams(0, -2, 1f))
+            seg.addView(t, LinearLayout.LayoutParams(-2, -2))
             modeTv.add(t)
         }
-        sheet.addView(seg, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(12f) })
+        val segHs = HorizontalScrollView(act)
+        segHs.isHorizontalScrollBarEnabled = false
+        segHs.addView(seg)
+        sheet.addView(segHs, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(12f) })
 
         // clave
         keyRow.orientation = LinearLayout.VERTICAL
@@ -197,11 +201,13 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
             t.background = rounded(if (i == mode) Color.WHITE else Color.TRANSPARENT, 40f)
             t.typeface = if (i == mode) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         }
-        input.hint = when (mode) { 0 -> "Describe tu reloj ideal…"; 1 -> "Opcional: estilo que buscas para tu fondo"; else -> "Describe el fondo que quieres…" }
+        input.hint = when (mode) { 0 -> "Describe un reloj completamente nuevo…"; 1 -> "Describe el estilo (fuente, color, efecto)…"; 2 -> "Qué cambio quieres en tu reloj actual…"; 3 -> "Opcional: estilo que buscas para tu fondo"; else -> "Describe el fondo que quieres…" }
         chips.removeAllViews()
         val sug = when (mode) {
-            0 -> listOf("Elegante dorado con serif", "Minimal neón oscuro", "Retro ochentero", "Grueso y divertido", "De aguja moderno")
-            1 -> listOf("Que contraste bien", "Cristal elegante", "Colorido", "Muy minimal")
+            0 -> listOf("Reloj con un Pikachu", "Barra de batería retro", "Fichas de dominó", "Planeta con anillos", "Estilo periódico antiguo", "Gato dormilón con la hora")
+            1 -> listOf("Elegante dorado con serif", "Minimal neón oscuro", "Retro ochentero", "Grueso y divertido", "De aguja moderno")
+            2 -> listOf("Hazlo más grande", "Añade el porcentaje de batería", "Más minimal", "Añade una pegatina", "Cámbialo a estilo retro")
+            3 -> listOf("Que contraste bien", "Cristal elegante", "Colorido", "Muy minimal")
             else -> listOf("Atardecer en la montaña", "Ciudad cyberpunk de noche", "Bosque con niebla", "Océano abstracto", "Galaxia morada")
         }
         val hist = (prefs.getString("ai_hist", "") ?: "").split("\n").filter { it.isNotEmpty() }.take(4)
@@ -209,8 +215,10 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
         for (s in sug) addChip(s, s)
         picked = -1
         show(when (mode) {
-            0 -> "Escribe cómo quieres el reloj y te propongo 4 estilos para elegir."
-            1 -> "Miro tu fondo y diseño relojes que combinen con sus colores."
+            0 -> "Describe cualquier reloj, aunque no exista: lo dibujo desde cero con formas, textos, agujas, batería e incluso pegatinas con imagen."
+            1 -> "Escribe cómo quieres el reloj y te propongo 4 estilos de fuente para elegir."
+            2 -> "Dime qué cambiar de tu reloj actual y te enseño 3 versiones retocadas."
+            3 -> "Miro tu fondo y diseño relojes nuevos que combinen con sus colores."
             else -> "Genera un fondo nuevo con IA y úsalo en tu pantalla."
         }, false)
     }
@@ -253,7 +261,7 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
         val k = key()
         if (k.isEmpty()) { keyRow.visibility = View.VISIBLE; show("Primero pega tu clave de Gemini (botón Clave).", true); return }
         val p = input.text.toString().trim()
-        if (p.isEmpty() && mode != 1) { show("Escribe una descripción.", true); return }
+        if (p.isEmpty() && mode != 3) { show("Escribe una descripción.", true); return }
         if (p.isNotEmpty()) {
             val h = (listOf(p) + (prefs.getString("ai_hist", "") ?: "").split("\n").filter { it.isNotEmpty() && it != p }).take(6)
             prefs.edit().putString("ai_hist", h.joinToString("\n")).apply()
@@ -263,15 +271,19 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
         val wall = host.wallBmp()
         val cur = host.curCfg()
         Thread {
-            if (mode == 2) {
+            if (mode == 4) {
                 val r = StudioAI.wallpaper(k, p)
                 post {
                     busy = false
                     if (r.first == null) show("No pude: " + r.second, true) else showWall(r.first!!)
                 }
             } else {
-                val img = if (mode == 1 && wall != null) StudioAI.jpegB64(wall) else null
-                val r = StudioAI.clockVariants(k, p, img)
+                val img = if (mode == 3 && wall != null) StudioAI.jpegB64(wall) else null
+                val r = when (mode) {
+                    1 -> StudioAI.clockVariants(k, p, null)
+                    2 -> StudioAI.refine(k, p, cur)
+                    else -> StudioAI.designVariants(k, p, img)
+                }
                 post {
                     busy = false
                     if (r.first.isEmpty()) show("No pude: " + (r.second ?: "respuesta vacía"), true) else showVariants(r.first, cur, wall)
@@ -301,6 +313,8 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
             t.setOnClickListener {
                 picked = i
                 host.style(c)
+                val sd = j.optString("sticker", "")
+                if (sd.isNotEmpty() && c.layout == "custom") makeSticker(sd)
                 for ((k, v) in tiles.withIndex()) {
                     val g = GradientDrawable(); g.cornerRadius = dp(16f).toFloat(); g.setColor(Color.TRANSPARENT)
                     g.setStroke(dp(3f), if (k == i) Hx.BLUE else Color.TRANSPARENT)
@@ -313,6 +327,22 @@ class AiSheet(private val act: Activity, private val host: Host) : FrameLayout(a
         }
         hs.addView(row)
         result.addView(hs, LayoutParams(-1, -1))
+    }
+
+    private val stickerCache = HashMap<String, String>()
+
+    private fun makeSticker(desc: String) {
+        stickerCache[desc]?.let { host.useSticker(it); return }
+        val k = key()
+        android.widget.Toast.makeText(act, "Generando pegatina…", android.widget.Toast.LENGTH_SHORT).show()
+        Thread {
+            val r = StudioAI.sticker(k, desc)
+            act.runOnUiThread {
+                val b = r.first
+                if (b != null) { stickerCache[desc] = b; host.useSticker(b) }
+                else android.widget.Toast.makeText(act, "Pegatina: " + (r.second ?: "error"), android.widget.Toast.LENGTH_LONG).show()
+            }
+        }.start()
     }
 
     private fun showWall(b: Bitmap) {

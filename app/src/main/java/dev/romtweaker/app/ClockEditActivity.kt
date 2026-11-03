@@ -371,11 +371,16 @@ class ClockEditActivity : Activity() {
 
     private fun cycleLayout() {
         val ic = cfg.ic > 0
-        val an = !ic && cfg.layout == "analog"
-        val v: View = if (ic) clock else if (an) clock.analog else clock.digits
+        val cu = !ic && cfg.layout == "custom"
+        val an = !ic && !cu && cfg.layout == "analog"
+        val v: View = if (ic) clock else if (cu) clock.custom else if (an) clock.analog else clock.digits
         v.animate().cancel()
         v.animate().alpha(0f).setDuration(170).withEndAction {
             if (ic) cfg.ic = if (cfg.ic >= IcClocks.COUNT) 1 else cfg.ic + 1
+            else if (cu) {
+                val idx = StudioDesigns.all.indexOfFirst { it.second == cfg.cs }
+                cfg.cs = StudioDesigns.all[(idx + 1) % StudioDesigns.all.size].second
+            }
             else if (an) cfg.an = cfg.an % 12 + 1
             else {
                 val order = listOf("stack", "inline", "col", "grid", "diag", "words")
@@ -632,7 +637,7 @@ class ClockEditActivity : Activity() {
     }
 
     private fun applyPreset(p: StudioCfg) {
-        val tgt: View = if (cfg.ic > 0 || p.ic > 0) clock else if (cfg.layout == "analog" || p.layout == "analog") clock.analog else clock.digits
+        val tgt: View = if (cfg.ic > 0 || p.ic > 0) clock else if (cfg.layout == "custom" || p.layout == "custom") clock.custom else if (cfg.layout == "analog" || p.layout == "analog") clock.analog else clock.digits
         cfg.styleFrom(p)
         snap()
         clock.applyConfig(cfg)
@@ -1232,6 +1237,12 @@ class ClockEditActivity : Activity() {
             override fun curCfg(): StudioCfg = cfg
             override fun wallBmp(): Bitmap? = wallBase
             override fun useWall(b: Bitmap) { customBg = b; selectBg(100) }
+            override fun useSticker(b64: String) {
+                getSharedPreferences("lock", MODE_PRIVATE).edit().putString("sticker", b64).apply()
+                StudioSticker.b64 = b64
+                clock.custom.invalidate()
+                sg.x = 0.9f; sg.t = 1f; sg.v += 3f; kick()
+            }
             override fun closeSheet() { aiSheet?.let { root.removeView(it) }; aiSheet = null }
         })
         root.addView(sheet, FrameLayout.LayoutParams(-1, -1))
@@ -1352,6 +1363,7 @@ object StudioPush {
         ok = bridge("putBool", "sc_on", p.getBoolean("sc_on", false)) && ok
         ok = bridge("putBool", "ic_on", p.getBoolean("ic_on", false)) && ok
         ok = bridge("putString", "depth_mask", p.getString("depth_mask", "") ?: "") && ok
+        ok = bridge("putString", "sticker", if (p.getString("sc_cfg", "")?.contains("sticker") == true || (p.getString("sc_cfg","") ?: "").contains("cs=")) (p.getString("sticker", "") ?: "") else "") && ok
         return ok
     }
 

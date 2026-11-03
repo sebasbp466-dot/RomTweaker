@@ -47,7 +47,7 @@ object StudioPresets {
 
     private const val W = 0xFFFFFFFF.toInt()
     val icPages = 5
-    val cats: List<String> = listOf("Centrados", "HyperOS 2", "Agujas", "Palabras", "Clásicos", "Cristal", "Revista", "Material You", "Neón", "Color", "Mezcla", "Vertical", "Contorno") + (0 until icPages).map { "Iconify ${it * 12 + 1}–${it * 12 + 12}" }
+    val cats: List<String> = listOf("Diseños", "Centrados", "HyperOS 2", "Agujas", "Palabras", "Clásicos", "Cristal", "Revista", "Material You", "Neón", "Color", "Mezcla", "Vertical", "Contorno") + (0 until icPages).map { "Iconify ${it * 12 + 1}–${it * 12 + 12}" }
 
     private fun st(name: String, cat: String, f: StudioCfg.() -> Unit): P {
         val c = StudioCfg()
@@ -224,12 +224,20 @@ object StudioPresets {
         dig + ana
     }
 
-    val all: List<P> = base + icons + collections
+    private val designs: List<P> = StudioDesigns.all.mapIndexed { i, d ->
+        val c = StudioCfg()
+        c.layout = "custom"; c.cs = d.second; c.fx = if (i % 3 == 1) "glass" else "solid"; c.tr = 30; c.size = 170; c.date = false
+        c.color = when (i % 4) { 0 -> 0xFFFFFFFF.toInt(); 1 -> 0xFFFFE6B8.toInt(); 2 -> 0xFFBFE3FF.toInt(); else -> 0xFFFFC9E3.toInt() }
+        c.c2 = when (i % 4) { 0 -> 0xFFFFB36B.toInt(); 1 -> 0xFFFF7A7A.toInt(); 2 -> 0xFF7AE0C3.toInt(); else -> 0xFFB68CFF.toInt() }
+        P(d.first, "Diseños", c)
+    }
+
+    val all: List<P> = designs + base + icons + collections
     val catsAll: List<String> = cats + pals.map { "Paleta · ${it.name}" } + pals.map { "Agujas · ${it.name}" }
     val total: Int get() = all.size
 
     fun same(a: StudioCfg, b: StudioCfg) = a.layout == b.layout && a.wght == b.wght && a.wdth == b.wdth && a.rond == b.rond &&
-        a.fx == b.fx && a.font == b.font && a.ol == b.ol && a.color == b.color && a.ic == b.ic && a.cmode == b.cmode && a.c2 == b.c2 && a.xs == b.xs
+        a.fx == b.fx && a.font == b.font && a.ol == b.ol && a.color == b.color && a.ic == b.ic && a.cmode == b.cmode && a.c2 == b.c2 && a.xs == b.xs && a.cs == b.cs
 }
 
 /** Últimos estilos aplicados (se muestran en la página "Para ti"). */
