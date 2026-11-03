@@ -534,6 +534,11 @@ object StudioTile {
         shine.translationX = -pw.toFloat()
         card.addView(shine, FrameLayout.LayoutParams((pw * 0.45f).toInt(), -1))
         val rad = radiusDp * dm.density
+        val bord = android.graphics.drawable.GradientDrawable()
+        bord.cornerRadius = radiusDp * dm.density
+        bord.setColor(0)
+        bord.setStroke(maxOf(1, (1.2f * dm.density).toInt()), 0x38FFFFFF)
+        card.foreground = bord
         card.clipToOutline = true
         card.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(v: View, o: Outline) { o.setRoundRect(0, 0, v.width, v.height, rad) }
@@ -652,8 +657,10 @@ class LockGalleryActivity : Activity() {
         bgRef = bg
 
         nameTv = TextView(this)
-        nameTv.setTextColor(0xB3FFFFFF.toInt())
-        nameTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        nameTv.setTextColor(0xE6FFFFFF.toInt())
+        nameTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        nameTv.letterSpacing = 0.04f
+        nameTv.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         nameTv.gravity = Gravity.CENTER
         val nlp = FrameLayout.LayoutParams(-1, -2, Gravity.TOP)
         nlp.topMargin = (cy + ph / 2f + Hx.dp(this, 6f)).toInt()
@@ -673,7 +680,7 @@ class LockGalleryActivity : Activity() {
         tl.setMargins(Hx.dp(this, 16f), Hx.dp(this, 30f), Hx.dp(this, 16f), 0)
         root.addView(topBar, tl)
 
-        stage.setOnTouchListener { _, e -> touch(e); true }
+        stage.setOnTouchListener { _, e -> touchTilt(e); touch(e); true }
         setContentView(root)
 
         // Entrada: la pantalla de bloqueo "se aleja" y aparece la galería
@@ -722,17 +729,40 @@ class LockGalleryActivity : Activity() {
         override fun onSensorChanged(e: android.hardware.SensorEvent) {
             val gx = (-e.values[0] / 9.8f).coerceIn(-1f, 1f)
             val gy = (e.values[1] / 9.8f).coerceIn(-1f, 1f)
-            if (baseY.isNaN()) baseY = gy
-            tiltX += (gx - tiltX) * 0.07f
-            tiltY += ((gy - baseY) - tiltY) * 0.07f
-            if (!::stage.isInitialized) return
-            val d = resources.displayMetrics.density
-            stage.cameraDistance = 14000f * d
-            stage.rotationY = tiltX * 5f
-            stage.rotationX = tiltY * 5f
-            wallBgV.translationX = -tiltX * 16f * d
-            wallBgV.translationY = tiltY * 16f * d
-            glowV.translationX = tiltX * 30f * d
+            if (baseY.isNaN()) { baseY = gy; try { android.util.Log.i("RomTweaker", "gal: sensor activo (" + e.sensor.name + ")") } catch (x: Throwable) { } }
+            tiltX += (gx - tiltX) * 0.12f
+            tiltY += ((gy - baseY) - tiltY) * 0.12f
+            applyTilt()
+        }
+    }
+
+    private var touchX = 0f
+    private var touchY = 0f
+
+    private fun applyTilt() {
+        if (!::stage.isInitialized) return
+        val d = resources.displayMetrics.density
+        val tx = (tiltX * 2.2f + touchX).coerceIn(-1.2f, 1.2f)
+        val ty = (tiltY * 2.2f + touchY).coerceIn(-1.2f, 1.2f)
+        stage.cameraDistance = 12000f * d
+        stage.rotationY = tx * 7f
+        stage.rotationX = ty * 7f
+        wallBgV.translationX = -tx * 22f * d
+        wallBgV.translationY = ty * 22f * d
+        glowV.translationX = tx * 40f * d
+    }
+
+    private fun touchTilt(e: MotionEvent) {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_DOWN -> { touchX = ((e.x / sw) - 0.5f) * 1.4f; touchY = -((e.y / sh) - 0.5f) * 0.8f; applyTilt() }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val x0 = touchX; val y0 = touchY
+                val a = ValueAnimator.ofFloat(1f, 0f)
+                a.duration = 600
+                a.interpolator = android.view.animation.OvershootInterpolator(1.8f)
+                a.addUpdateListener { val k = it.animatedValue as Float; touchX = x0 * k; touchY = y0 * k; applyTilt() }
+                a.start()
+            }
         }
     }
 
@@ -740,7 +770,7 @@ class LockGalleryActivity : Activity() {
         super.onResume()
         try {
             sensors = getSystemService(SENSOR_SERVICE) as android.hardware.SensorManager
-            val g = sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_GRAVITY) ?: sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER)
+            val g = sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_GRAVITY)
             if (g != null) sensors?.registerListener(sl, g, android.hardware.SensorManager.SENSOR_DELAY_GAME)
         } catch (e: Throwable) { }
     }
@@ -818,7 +848,9 @@ class LockGalleryActivity : Activity() {
                 val sc = if (a2 <= 1f) 1f - 0.40f * a2 else 0.60f - 0.08f * (a2 - 1f)
                 c.scaleX = sc
                 c.scaleY = sc
-                c.alpha = 1f
+                c.alpha = 1f - 0.45f * min(1f, a2)
+                c.cameraDistance = 9000f * resources.displayMetrics.density
+                c.rotationY = (-dj * 22f).coerceIn(-34f, 34f)
                 c.translationZ = 10f * (1f - min(1f, a2))
             }
         }

@@ -171,6 +171,7 @@ object StudioFont {
 }
 
 object StudioWall {
+    private const val FONT_APP = "dev.romtweaker.app"
     private var bmp: Bitmap? = null
     private var hi: Bitmap? = null
     private var tried = false
@@ -178,8 +179,34 @@ object StudioWall {
 
     fun reset() { bmp = null; tried = false; hi = null; triedHi = false }
 
+    /** Dentro de la app: lee el archivo real del fondo con root (la API de Android lo oculta sin permiso de almacenamiento total). */
+    private fun rootLoad(max: Int): Bitmap? {
+        for (name in listOf("wallpaper_lock", "wallpaper")) {
+            for (su in listOf(arrayOf("su", "-c"), arrayOf("/data/adb/ksu/bin/su", "-c"), arrayOf("/system/xbin/su", "-c"))) {
+                try {
+                    val p = ProcessBuilder(su[0], su[1], "cat /data/system/users/0/$name").start()
+                    val bytes = p.inputStream.readBytes()
+                    p.waitFor()
+                    if (bytes.size < 2000) continue
+                    val o = BitmapFactory.Options()
+                    o.inJustDecodeBounds = true
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+                    if (o.outWidth <= 0) continue
+                    var ss = 1
+                    while (maxOf(o.outWidth, o.outHeight) / ss > max) ss *= 2
+                    val o2 = BitmapFactory.Options()
+                    o2.inSampleSize = ss
+                    val b = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o2)
+                    if (b != null) { try { android.util.Log.i("RomTweaker", "wall: fondo leído con root ($name ${b.width}x${b.height})") } catch (e: Throwable) { }; return b }
+                } catch (e: Throwable) { }
+            }
+        }
+        return null
+    }
+
     private fun load(ctx: Context, max: Int): Bitmap? {
         var out: Bitmap? = null
+        if (ctx.packageName == FONT_APP) { rootLoad(max)?.let { return it } }
         try {
             val wm = WallpaperManager.getInstance(ctx)
             fun file(which: Int): android.os.ParcelFileDescriptor? = try {

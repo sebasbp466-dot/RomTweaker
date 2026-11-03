@@ -362,7 +362,7 @@ object IcModule {
             inflated = sk
             ml.width = -2
             ml.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            ml.topMargin = (cfg.top * d).toInt()
+            ml.topMargin = (maxOf(cfg.top, 42f) * d).toInt()
             ml.bottomMargin = (24 * d).toInt()
         } else {
             val pkg = ctx.createPackageContext(APP, Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY)
