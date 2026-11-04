@@ -62,5 +62,7 @@
     <activity android:name=".LockGalleryActivity" android:exported="true" android:theme="@style/LockTheme"
         android:showWhenLocked="true" android:excludeFromRecents="true" android:launchMode="singleTask"
         android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
+    <activity android:name=".IslaActivity" android:exported="false" android:theme="@style/HubTheme"
+        android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
 </application>
 </manifest>
