@@ -268,12 +268,14 @@ class ClockEditActivity : Activity() {
         kg.cornerRadius = dp(40f).toFloat()
         kg.setColor(0xFFFFFFFF.toInt())
         knob.background = kg
-        segFrame.addView(knob, FrameLayout.LayoutParams(0, -1).also { it.setMargins(dp(3f), dp(3f), 0, dp(3f)) })
-        segFrame.addOnLayoutChangeListener { _, l, _, r, _, ol, _, orr, _ ->
-            if (r - l != orr - ol) {
+        segFrame.addView(knob, FrameLayout.LayoutParams(0, 1).also { it.setMargins(dp(3f), dp(3f), 0, 0) })
+        segFrame.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, orr, ob ->
+            if (r - l != orr - ol || b - t != ob - ot) {
                 val kw = (r - l - dp(6f)) / 4
-                (knob.layoutParams as FrameLayout.LayoutParams).width = kw
-                knob.requestLayout()
+                val lp = knob.layoutParams as FrameLayout.LayoutParams
+                lp.width = kw
+                lp.height = maxOf(1, b - t - dp(6f))
+                knob.layoutParams = lp
                 knob.translationX = tab * kw.toFloat()
             }
         }
