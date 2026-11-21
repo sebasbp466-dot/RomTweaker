@@ -675,6 +675,20 @@ class LockGalleryActivity : Activity() {
         topBar = FrameLayout(this)
         topBar.addView(Hx.pill(this, "Salir", 0x2EFFFFFF, Color.WHITE) { leave() }, FrameLayout.LayoutParams(-2, -2, Gravity.START))
         topBar.addView(Hx.pill(this, "Aplicar", Hx.BLUE, Color.WHITE) { applyOnly() }, FrameLayout.LayoutParams(-2, -2, Gravity.END))
+        val bgPill = Hx.pill(this, "Fondo", 0x2EFFFFFF, Color.WHITE) {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            i.addCategory(Intent.CATEGORY_OPENABLE)
+            i.type = "image/*"
+            try { startActivityForResult(i, 92) } catch (e: Throwable) { Toast.makeText(this, "No hay selector de imágenes", Toast.LENGTH_SHORT).show() }
+        }
+        bgPill.setOnLongClickListener {
+            java.io.File(filesDir, "prev_bg.jpg").delete()
+            StudioWall.reset()
+            Toast.makeText(this, "Fondo de vista previa restablecido", Toast.LENGTH_SHORT).show()
+            recreate()
+            true
+        }
+        topBar.addView(bgPill, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL))
         val tl = FrameLayout.LayoutParams(-1, -2, Gravity.TOP)
         tl.setMargins(Hx.dp(this, 16f), Hx.dp(this, 30f), Hx.dp(this, 16f), 0)
         root.addView(topBar, tl)
@@ -994,8 +1008,25 @@ class LockGalleryActivity : Activity() {
 
     override fun onActivityResult(rc: Int, res: Int, data: Intent?) {
         super.onActivityResult(rc, res, data)
+        if (rc == 92) { val u = data?.data; if (res == RESULT_OK && u != null) saveBg(u); return }
         if (rc != 91) return
         if (res == RESULT_OK) { finish(); overridePendingTransition(0, 0) } else resetAfterEdit()
+    }
+
+    private fun saveBg(u: android.net.Uri) {
+        try {
+            val o = android.graphics.BitmapFactory.Options()
+            o.inJustDecodeBounds = true
+            contentResolver.openInputStream(u)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o) }
+            var ss = 1
+            while (maxOf(o.outWidth, o.outHeight) / ss > 2000) ss *= 2
+            val o2 = android.graphics.BitmapFactory.Options()
+            o2.inSampleSize = ss
+            val b = contentResolver.openInputStream(u)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o2) } ?: return
+            java.io.File(filesDir, "prev_bg.jpg").outputStream().use { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
+            StudioWall.reset()
+            recreate()
+        } catch (e: Throwable) { Toast.makeText(this, "No pude usar esa imagen", Toast.LENGTH_SHORT).show() }
     }
 
     private fun leave() {

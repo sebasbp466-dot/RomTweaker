@@ -225,6 +225,19 @@ object StudioWall {
 
     private fun load(ctx: Context, max: Int): Bitmap? {
         var out: Bitmap? = null
+        try {
+            val pf = java.io.File(ctx.filesDir, "prev_bg.jpg")
+            if (pf.exists()) {
+                val o = BitmapFactory.Options()
+                o.inJustDecodeBounds = true
+                BitmapFactory.decodeFile(pf.path, o)
+                var ss = 1
+                while (maxOf(o.outWidth, o.outHeight) / ss > max) ss *= 2
+                val o2 = BitmapFactory.Options()
+                o2.inSampleSize = ss
+                BitmapFactory.decodeFile(pf.path, o2)?.let { return it }
+            }
+        } catch (e: Throwable) { }
         if (ctx.packageName == FONT_APP) { rootLoad(max)?.let { return it } }
         try {
             val wm = WallpaperManager.getInstance(ctx)
