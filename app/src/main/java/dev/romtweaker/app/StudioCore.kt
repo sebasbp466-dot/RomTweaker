@@ -188,8 +188,19 @@ object StudioWall {
     fun reset() { bmp = null; tried = false; hi = null; triedHi = false }
 
     /** Dentro de la app: lee el archivo real del fondo con root (la API de Android lo oculta sin permiso de almacenamiento total). */
+    private fun wallNames(): List<String> {
+        val l = arrayListOf("wallpaper_lock", "wallpaper", "wallpaper_lock_orig", "wallpaper_orig")
+        try {
+            val pr = ProcessBuilder("su", "-c", "ls /data/system/users/0/").start()
+            val t = pr.inputStream.bufferedReader().readText()
+            pr.waitFor()
+            for (n in t.split("\n")) { val x = n.trim(); if (x.startsWith("wallpaper") && !x.endsWith(".xml") && !l.contains(x)) l.add(x) }
+        } catch (e: Throwable) { }
+        return l
+    }
+
     private fun rootLoad(max: Int): Bitmap? {
-        for (name in listOf("wallpaper_lock", "wallpaper")) {
+        for (name in wallNames()) {
             for (su in listOf(arrayOf("su", "-c"), arrayOf("/data/adb/ksu/bin/su", "-c"), arrayOf("/system/xbin/su", "-c"))) {
                 try {
                     val p = ProcessBuilder(su[0], su[1], "cat /data/system/users/0/$name").start()
@@ -244,6 +255,19 @@ object StudioWall {
                     d.setBounds(0, 0, w, h)
                     d.draw(Canvas(b))
                     out = b
+                }
+            }
+            if (out == null) {
+                var d2: android.graphics.drawable.Drawable? = try { wm.builtInDrawable } catch (e: Throwable) { null }
+                if (d2 == null) try { d2 = wm.wallpaperInfo?.loadThumbnail(ctx.packageManager) } catch (e: Throwable) { }
+                if (d2 != null && d2.intrinsicWidth > 0) {
+                    val s2 = max.toFloat() / maxOf(d2.intrinsicWidth, d2.intrinsicHeight)
+                    val w2 = maxOf(1, (d2.intrinsicWidth * s2).toInt())
+                    val h2 = maxOf(1, (d2.intrinsicHeight * s2).toInt())
+                    val b2 = Bitmap.createBitmap(w2, h2, Bitmap.Config.ARGB_8888)
+                    d2.setBounds(0, 0, w2, h2)
+                    d2.draw(Canvas(b2))
+                    out = b2
                 }
             }
         } catch (e: Throwable) { }
