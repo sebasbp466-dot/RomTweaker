@@ -676,17 +676,24 @@ class LockGalleryActivity : Activity() {
         topBar.addView(Hx.pill(this, "Salir", 0x2EFFFFFF, Color.WHITE) { leave() }, FrameLayout.LayoutParams(-2, -2, Gravity.START))
         topBar.addView(Hx.pill(this, "Aplicar", Hx.BLUE, Color.WHITE) { applyOnly() }, FrameLayout.LayoutParams(-2, -2, Gravity.END))
         val bgPill = Hx.pill(this, "Fondo", 0x2EFFFFFF, Color.WHITE) {
-            val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
-            i.addCategory(Intent.CATEGORY_OPENABLE)
-            i.type = "image/*"
-            try { startActivityForResult(i, 92) } catch (e: Throwable) { Toast.makeText(this, "No hay selector de imágenes", Toast.LENGTH_SHORT).show() }
-        }
-        bgPill.setOnLongClickListener {
-            java.io.File(filesDir, "prev_bg.jpg").delete()
-            StudioWall.reset()
-            Toast.makeText(this, "Fondo de vista previa restablecido", Toast.LENGTH_SHORT).show()
-            recreate()
-            true
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Fondo de las vistas previas")
+                .setItems(arrayOf("Capturar mi fondo (automático)", "Elegir una imagen", "Quitar el fondo elegido")) { _, w ->
+                    when (w) {
+                        0 -> try { startActivityForResult(Intent(this, WallCaptureActivity::class.java), 93) } catch (e: Throwable) { }
+                        1 -> {
+                            val it2 = Intent(Intent.ACTION_OPEN_DOCUMENT)
+                            it2.addCategory(Intent.CATEGORY_OPENABLE)
+                            it2.type = "image/*"
+                            try { startActivityForResult(it2, 92) } catch (e: Throwable) { Toast.makeText(this, "No hay selector de imágenes", Toast.LENGTH_SHORT).show() }
+                        }
+                        else -> {
+                            java.io.File(filesDir, "prev_bg.jpg").delete()
+                            StudioWall.reset()
+                            recreate()
+                        }
+                    }
+                }.show()
         }
         topBar.addView(bgPill, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL))
         val tl = FrameLayout.LayoutParams(-1, -2, Gravity.TOP)
@@ -1008,6 +1015,7 @@ class LockGalleryActivity : Activity() {
 
     override fun onActivityResult(rc: Int, res: Int, data: Intent?) {
         super.onActivityResult(rc, res, data)
+        if (rc == 93) { if (res == RESULT_OK) { StudioWall.reset(); recreate() }; return }
         if (rc == 92) { val u = data?.data; if (res == RESULT_OK && u != null) saveBg(u); return }
         if (rc != 91) return
         if (res == RESULT_OK) { finish(); overridePendingTransition(0, 0) } else resetAfterEdit()
