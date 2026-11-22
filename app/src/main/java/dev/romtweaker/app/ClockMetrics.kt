@@ -33,7 +33,13 @@ class ClockMetrics(val sw: Int, val sh: Int, val gx: Int, val gy: Int, val gw: I
             if (old) return "Medidas antiguas descartadas (se tomaron con la pantalla apagada). Pulsa «Recalibrar» o reinicia SystemUI y bloquea/desbloquea."
             if (t == 0L) return "Medidas reales: aún no recibidas. Reinicia SystemUI y pulsa «Ver bloqueo ahora»; la vista previa usará las medidas del reloj verdadero."
             val min = (System.currentTimeMillis() - t) / 60000L
-            return "Medidas reales del reloj recibidas (hace " + min + " min). La vista previa usa su posición, tamaño y dígitos."
+            val detalle = try {
+                val j = JSONObject(p.getString("stack", "") ?: "")
+                val a = j.getJSONArray("d")
+                val bs = (0 until a.length()).joinToString(",") { a.getJSONObject(it).getDouble("base").toInt().toString() }
+                " [mv=" + j.optInt("mv", 0) + " gy=" + j.optInt("gy") + " gh=" + j.optInt("gh") + " bases=" + bs + "]"
+            } catch (e: Throwable) { "" }
+            return "Medidas reales del reloj recibidas (hace " + min + " min). La vista previa usa su posición, tamaño y dígitos." + detalle
         }
     }
 }

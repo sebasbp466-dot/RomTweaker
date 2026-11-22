@@ -95,7 +95,7 @@ class ModuleMain : XposedModule() {
             if (pm != null && !pm.isInteractive) return
             val nowT = android.os.SystemClock.uptimeMillis()
             val ltp = lastPush[v]
-            if (ltp != null && nowT - ltp < 500L) return
+            if (ltp != null && nowT - ltp < 500L) { v.postDelayed({ v.invalidate() }, 520L); return }
             lastPush[v] = nowT
             val dm = v.resources.displayMetrics
             val loc = IntArray(2)

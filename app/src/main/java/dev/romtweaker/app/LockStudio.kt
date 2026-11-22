@@ -152,6 +152,7 @@ object LockStudio {
         })
         p.addView(fm, m.lp(m.MP, m.WC, 4, 0, 4, 6))
         p.addView(m.tv("Fuente de la vista previa: " + face.fontName, 11f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 10))
+        p.addView(m.tv("Medidas: " + ClockMetrics.status(act), 10f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 8))
         val sec = lp.getInt("lk_sec", 0)
         val seg = RtFlow(act, m.dp(8))
         val segNames = listOf("Estilo", "Fuente", "Color", "Sistema")

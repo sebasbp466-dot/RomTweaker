@@ -164,9 +164,9 @@ class FlexPreview(ctx: Context) : View(ctx) {
             p.textSize = h * 0.101f
             c.drawText(hh + ":" + mm, w / 2f, h * 0.143f, p)
         } else {
-            p.textSize = h * 0.216f
-            c.drawText(hh, w / 2f, h * 0.482f, p)
-            c.drawText(mm, w / 2f, h * 0.653f, p)
+            p.textSize = h * 0.225f
+            c.drawText(hh, w / 2f, h * 0.350f, p)
+            c.drawText(mm, w / 2f, h * 0.538f, p)
         }
     }
 
