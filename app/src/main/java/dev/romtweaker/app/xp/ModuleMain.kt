@@ -72,6 +72,7 @@ class ModuleMain : XposedModule() {
     }
 
     private val mLast = HashMap<String, String>()
+    private val mAt = HashMap<String, Long>()
     private val mPend = HashMap<String, String>()
     private val mRun = HashMap<String, Runnable>()
     private val liveViews = java.util.WeakHashMap<android.view.View, Boolean>()
@@ -117,22 +118,23 @@ class ModuleMain : XposedModule() {
             walk(v)
             if (arr.length() == 0) return
             val j = org.json.JSONObject()
-            j.put("sw", dm.widthPixels); j.put("sh", dm.heightPixels)
+            j.put("mv", 2); j.put("sw", dm.widthPixels); j.put("sh", dm.heightPixels)
             j.put("gx", loc[0]); j.put("gy", loc[1]); j.put("gw", v.width); j.put("gh", v.height)
             j.put("d", arr)
             val str = j.toString()
-            if (str == mLast[kind]) {
+            if (str == mLast[kind] && nowT - (mAt[kind] ?: 0L) < 20000L) {
                 mRun[kind]?.let { v.removeCallbacks(it) }
                 mRun.remove(kind); mPend.remove(kind)
                 return
             }
-            if (str == mPend[kind]) return
+            if (str == mPend[kind] && mRun[kind] != null) return
             mPend[kind] = str
             mRun[kind]?.let { v.removeCallbacks(it) }
             val ctx = v.context
             val r = Runnable {
                 try {
                     mLast[kind] = str
+                    mAt[kind] = android.os.SystemClock.uptimeMillis()
                     mPend.remove(kind); mRun.remove(kind)
                     val intent = android.content.Intent("dev.romtweaker.app.CLOCK_METRICS").setPackage("dev.romtweaker.app")
                     intent.putExtra("kind", kind)

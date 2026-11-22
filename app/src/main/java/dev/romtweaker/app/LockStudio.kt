@@ -145,6 +145,11 @@ object LockStudio {
         val fm = RtFlow(act, m.dp(8))
         fm.addView(m.chip("Pantalla completa", !compact) { lp.edit().putBoolean("pv_compact", false).apply(); refresh() })
         fm.addView(m.chip("Con notificaciones", compact) { lp.edit().putBoolean("pv_compact", true).apply(); refresh() })
+        fm.addView(m.chip("Recalibrar", false) {
+            act.getSharedPreferences("lockmetrics", Activity.MODE_PRIVATE).edit().clear().apply()
+            say("Medidas borradas: la pantalla se apagará y encenderá para medir el reloj real")
+            LockStudio.screenBlink()
+        })
         p.addView(fm, m.lp(m.MP, m.WC, 4, 0, 4, 6))
         p.addView(m.tv("Fuente de la vista previa: " + face.fontName, 11f, m.onSurfaceVar), m.lp(m.MP, m.WC, 8, 0, 8, 10))
         val sec = lp.getInt("lk_sec", 0)
