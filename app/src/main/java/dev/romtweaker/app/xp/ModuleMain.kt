@@ -26,9 +26,9 @@ class ModuleMain : XposedModule() {
         hookLock2(param.classLoader, prefs)
         hookWeight(param.classLoader, prefs)
         hookLockSmall(param.classLoader, prefs)
-        IcModule.install(this, param.classLoader, prefs)
-        IcxHide.install(this, prefs)
-        IcxScan.probe(this, param.classLoader)
+        try { IcModule.install(this, param.classLoader, prefs) } catch (e: Throwable) { log(Log.WARN, TAG, "IcModule: " + e) }
+        try { IcxHide.install(this, prefs) } catch (e: Throwable) { log(Log.WARN, TAG, "IcxHide: " + e) }
+        try { IcxScan.probe(this, param.classLoader) } catch (e: Throwable) { log(Log.WARN, TAG, "IcxScan: " + e) }
     }
 
     private fun formatted(prefs: SharedPreferences?, orig: Any?): Any? {
@@ -75,6 +75,7 @@ class ModuleMain : XposedModule() {
     private val mPend = HashMap<String, String>()
     private val mRun = HashMap<String, Runnable>()
     private val liveViews = java.util.WeakHashMap<android.view.View, Boolean>()
+    private val lastPush = java.util.WeakHashMap<android.view.View, Long>()
     private var liveListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     /** Envía a la app las medidas REALES del reloj cuando dejan de cambiar (700 ms estables) y reaplica el efecto al cambiar ajustes. */
@@ -89,6 +90,12 @@ class ModuleMain : XposedModule() {
                 prefs.registerOnSharedPreferenceChangeListener(l)
             }
             if (!v.isShown || v.width <= 0 || v.alpha < 0.99f) return
+            val pm = v.context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+            if (pm != null && !pm.isInteractive) return
+            val nowT = android.os.SystemClock.uptimeMillis()
+            val ltp = lastPush[v]
+            if (ltp != null && nowT - ltp < 500L) return
+            lastPush[v] = nowT
             val dm = v.resources.displayMetrics
             val loc = IntArray(2)
             v.getLocationOnScreen(loc)

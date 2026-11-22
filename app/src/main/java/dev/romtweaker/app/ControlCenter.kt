@@ -230,6 +230,10 @@ class ControlCenterService : Service() {
     }
 
     private fun startFg() {
+        try { startFg2() } catch (e: Throwable) { try { android.util.Log.w("RomTweaker", "fg: " + e) } catch (x: Throwable) { } }
+    }
+
+    private fun startFg2() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Centro de control", NotificationManager.IMPORTANCE_MIN))
         val open = PendingIntent.getService(

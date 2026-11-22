@@ -18,11 +18,29 @@ class FlexPreview(ctx: Context) : View(ctx) {
     var compact = false
     var metrics: ClockMetrics? = null
     var scale = 1f
+    /** Margen extra arriba/abajo: en algunas ROM las filas del reloj sobresalen del contenedor y se cortarían. */
+    var padTop = 0f
+    var padBot = 0f
     var fontName = "sistema"
     private var tf: Typeface = Typeface.DEFAULT
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
 
     companion object {
+        @Volatile private var cTf: Typeface? = null
+        @Volatile private var cName = ""
+
+        fun layoutFor(mt: ClockMetrics, sc: Float, face: FlexPreview): android.widget.FrameLayout.LayoutParams {
+            var top = mt.gy.toFloat(); var bot = (mt.gy + mt.gh).toFloat()
+            for (d in mt.digits) { top = minOf(top, d.base - 0.80f * d.size); bot = maxOf(bot, d.base + 0.25f * d.size) }
+            val pt = ((mt.gy - top) * sc).toInt().coerceAtLeast(0) + (if (top < mt.gy) 4 else 0)
+            val pb = ((bot - (mt.gy + mt.gh)) * sc).toInt().coerceAtLeast(0) + (if (bot > mt.gy + mt.gh) 4 else 0)
+            face.padTop = pt.toFloat(); face.padBot = pb.toFloat()
+            val fl = android.widget.FrameLayout.LayoutParams((mt.gw * sc).toInt(), (mt.gh * sc).toInt() + pt + pb)
+            fl.leftMargin = (mt.gx * sc).toInt()
+            fl.topMargin = (mt.gy * sc).toInt() - pt
+            return fl
+        }
+
         const val AGSL = """
             uniform shader inp;
             uniform float h;
@@ -58,7 +76,10 @@ class FlexPreview(ctx: Context) : View(ctx) {
         """
     }
 
-    init { loadFont() }
+    init {
+        val c = cTf
+        if (c != null) { tf = c; fontName = cName } else { loadFont(); cTf = tf; cName = fontName }
+    }
 
     private fun supports(t: Typeface): Boolean {
         val q = Paint()
@@ -118,6 +139,7 @@ class FlexPreview(ctx: Context) : View(ctx) {
         try { p.setFontVariationSettings("'wght' " + cfg.weight + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { }
         val mt = metrics
         if (mt != null) {
+            c.translate(0f, padTop)
             val sc = scale
             val d = mt.digits
             val all = hh + mm
@@ -154,8 +176,10 @@ class FlexPreview(ctx: Context) : View(ctx) {
         if (android.os.Build.VERSION.SDK_INT < 33) return
         post {
             try {
-                val hh = Math.max(1f, height.toFloat())
-                val rs = RuntimeShader(AGSL)
+                val hh = Math.max(1f, height.toFloat() - padTop - padBot)
+                val padded = padTop > 0f || padBot > 0f
+                val rs = RuntimeShader(if (padded) AGSL.replace("uniform float edge;", "uniform float edge;\n uniform float y0;").replace("p.y / h", "(p.y - y0) / h") else AGSL)
+                if (padded) rs.setFloatUniform("y0", padTop)
                 val glass = cfg.style.startsWith("glass")
                 val col = cfg.color
                 val c2 = if (glass || cfg.style == "solid") col else cfg.accent

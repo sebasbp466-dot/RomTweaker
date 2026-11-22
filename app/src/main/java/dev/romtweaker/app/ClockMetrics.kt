@@ -39,6 +39,12 @@ class ClockMetricsReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         val k = i.getStringExtra("kind") ?: return
         val j = i.getStringExtra("json") ?: return
+        val MAXJ = 24000
+        if ((k != "stack" && k != "compact") || j.length > MAXJ) return
+        try {
+            val o = JSONObject(j)
+            if (o.getInt("sw") <= 0 || o.getInt("gw") <= 0 || o.getInt("gh") <= 0 || o.getJSONArray("d").length() > 16) return
+        } catch (e: Throwable) { return }
         c.getSharedPreferences("lockmetrics", Context.MODE_PRIVATE).edit().putString(k, j).putLong("t_" + k, System.currentTimeMillis()).apply()
     }
 }

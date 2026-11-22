@@ -22,6 +22,7 @@ class WallCaptureActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true)
         val v = View(this)
         v.setBackgroundColor(Color.TRANSPARENT)
         setContentView(v)

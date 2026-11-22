@@ -7,14 +7,18 @@ object Root {
         return try {
             val p = Runtime.getRuntime().exec(Adapt.suCmd(cmd))
             val out = StringBuilder()
-            val t = Thread {
-                try { out.append(p.inputStream.bufferedReader().readText()) } catch (e: Exception) {}
+            val er = StringBuilder()
+            val t1 = Thread { try { out.append(p.inputStream.bufferedReader().readText()) } catch (e: Exception) {} }
+            val t2 = Thread { try { er.append(p.errorStream.bufferedReader().readText()) } catch (e: Exception) {} }
+            t1.start(); t2.start()
+            if (!p.waitFor(90, java.util.concurrent.TimeUnit.SECONDS)) {
+                try { p.destroyForcibly() } catch (e: Exception) {}
+                t1.join(500); t2.join(500)
+                Pair(-2, "tiempo agotado: " + cmd.take(60))
+            } else {
+                t1.join(3000); t2.join(3000)
+                Pair(p.exitValue(), (out.toString() + er.toString()).trim())
             }
-            t.start()
-            val err = p.errorStream.bufferedReader().readText()
-            t.join()
-            val code = p.waitFor()
-            Pair(code, (out.toString() + err).trim())
         } catch (e: Exception) {
             Pair(-1, e.message ?: "error")
         }
@@ -23,7 +27,13 @@ object Root {
     fun sh(cmd: String): String {
         return try {
             val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-            p.inputStream.bufferedReader().readText().trim()
+            val out = StringBuilder()
+            val t1 = Thread { try { out.append(p.inputStream.bufferedReader().readText()) } catch (e: Exception) {} }
+            val t2 = Thread { try { p.errorStream.readBytes() } catch (e: Exception) {} }
+            t1.start(); t2.start()
+            if (!p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)) { try { p.destroyForcibly() } catch (e: Exception) {} }
+            t1.join(1000)
+            out.toString().trim()
         } catch (e: Exception) {
             ""
         }

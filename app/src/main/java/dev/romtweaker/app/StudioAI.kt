@@ -82,16 +82,44 @@ object StudioAI {
         c.setRequestProperty("x-goog-api-key", key)
         c.outputStream.use { it.write(body.toString().toByteArray()) }
         val code = c.responseCode
-        val txt = (if (code in 200..299) c.inputStream else c.errorStream).bufferedReader().use { it.readText() }
-        if (code !in 200..299) throw RuntimeException(when (code) {
-            400 -> "Petición no válida (revisa la clave)"
-            401, 403 -> "Clave rechazada: revisa que sea una clave de Gemini válida"
-            429 -> "Límite de uso alcanzado, espera un minuto"
-            404 -> "404 " + txt.take(160)
-            else -> "Error $code " + txt.take(120)
-        })
-        return JSONObject(txt)
+        val txt = try { ((if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }) ?: "" } finally { try { c.disconnect() } catch (e: Throwable) { } }
+        if (code !in 200..299) {
+            val msg = when (code) {
+                400 -> "Petición no válida (revisa la clave)"
+                401, 403 -> "Clave rechazada: revisa que sea una clave de Gemini válida"
+                404 -> "404 " + txt.take(160)
+                429 -> "Límite de uso alcanzado, espera un minuto"
+                500, 502, 503, 504 -> "Gemini está saturado ahora mismo (alta demanda), inténtalo en un momento"
+                else -> "Error $code " + txt.take(120)
+            }
+            if (code == 404 || code == 429 || code >= 500) throw Soft(msg)
+            throw RuntimeException(msg)
+        }
+        return try { JSONObject(txt) } catch (e: Throwable) { throw Soft("Respuesta de Gemini no válida") }
     }
+
+    private class Soft(m: String) : RuntimeException(m)
+
+    /** Texto de la respuesta: primer fragmento que no sea "pensamiento"; error claro si no hay candidatos (bloqueo de seguridad, etc.). */
+    private fun textOf(r: JSONObject): String {
+        val cand = r.optJSONArray("candidates")?.optJSONObject(0)
+            ?: throw RuntimeException("Gemini no devolvió respuesta" + (r.optJSONObject("promptFeedback")?.optString("blockReason")?.let { if (it.isNotEmpty()) " (bloqueada: $it)" else "" } ?: ""))
+        val parts = cand.optJSONObject("content")?.optJSONArray("parts")
+            ?: throw RuntimeException("Gemini no devolvió texto (" + cand.optString("finishReason", "sin motivo") + ")")
+        val sb = StringBuilder()
+        for (i in 0 until parts.length()) {
+            val o = parts.optJSONObject(i) ?: continue
+            if (o.optBoolean("thought", false)) continue
+            val t = o.optString("text", "")
+            if (t.isNotEmpty()) sb.append(t)
+        }
+        if (sb.isEmpty()) throw RuntimeException("Gemini devolvió una respuesta vacía (" + cand.optString("finishReason", "") + ")")
+        return sb.toString()
+    }
+
+    private fun partsOf(r: JSONObject): org.json.JSONArray =
+        r.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+            ?: throw RuntimeException("Gemini no devolvió resultado (bloqueado por seguridad o sin respuesta)")
 
     private val TEXT_MODELS = listOf("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash")
     private val IMAGE_MODELS = listOf("gemini-3.1-flash-lite-image", "gemini-3.1-flash-image", "gemini-nano-banana-2.1", "gemini-2.5-flash-image")
@@ -100,13 +128,16 @@ object StudioAI {
     private fun callAny(key: String, models: List<String>, body: JSONObject): JSONObject {
         var last: Throwable? = null
         for (m in models) {
-            try { return call(key, m, body) } catch (e: Throwable) {
+            try { return call(key, m, body) } catch (e: Soft) {
                 last = e
-                val msg = e.message ?: ""
-                if (!msg.startsWith("404")) throw e
+                try { Thread.sleep(600) } catch (x: Throwable) { }
+            } catch (e: java.io.IOException) {
+                last = e
             }
         }
-        throw RuntimeException("Ningún modelo de Gemini disponible con tu clave: " + (last?.message ?: "").take(120))
+        val lm = last?.message ?: ""
+        if (lm.startsWith("404")) throw RuntimeException("Ningún modelo de Gemini disponible con tu clave: " + lm.take(120))
+        throw RuntimeException(if (lm.isEmpty()) "No hay conexión con Gemini" else lm)
     }
 
     private const val SYS = "Eres un diseñador de relojes para pantalla de bloqueo. Responde SOLO con un objeto JSON (sin markdown) con estas claves opcionales: " +
@@ -131,7 +162,7 @@ object StudioAI {
         b.put("contents", org.json.JSONArray().put(JSONObject().put("parts", parts)))
         b.put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
         val r = callAny(key, TEXT_MODELS, b)
-        var t = r.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
+        var t = textOf(r).trim()
         if (t.startsWith("```")) t = t.substringAfter('\n').substringBeforeLast("```")
         val arr = if (t.startsWith("[")) org.json.JSONArray(t) else JSONObject(t).optJSONArray("variants") ?: org.json.JSONArray().put(JSONObject(t))
         val out = ArrayList<JSONObject>()
@@ -165,7 +196,7 @@ object StudioAI {
         b.put("contents", org.json.JSONArray().put(JSONObject().put("parts", parts)))
         b.put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("temperature", 1.0))
         val r = callAny(key, TEXT_MODELS, b)
-        var t = r.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
+        var t = textOf(r).trim()
         if (t.startsWith("```")) t = t.substringAfter('\n').substringBeforeLast("```")
         val arr = if (t.startsWith("[")) org.json.JSONArray(t) else JSONObject(t).optJSONArray("variants") ?: org.json.JSONArray().put(JSONObject(t))
         val out = ArrayList<JSONObject>()
@@ -190,7 +221,7 @@ object StudioAI {
             "Illustration of: $desc. Single centered object, bold clean style, vivid colors, plain pure white background, no text, no shadow, no border.")))))
         b.put("generationConfig", JSONObject().put("responseModalities", org.json.JSONArray().put("TEXT").put("IMAGE")))
         val r = callAny(key, IMAGE_MODELS, b)
-        val parts = r.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts")
+        val parts = partsOf(r)
         var img: Bitmap? = null
         for (i in 0 until parts.length()) {
             val d = parts.getJSONObject(i).let { it.optJSONObject("inlineData") ?: it.optJSONObject("inline_data") }
@@ -240,7 +271,7 @@ object StudioAI {
         b.put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", "Fondo de pantalla de móvil, formato vertical 9:16, sin texto ni marcas. $prompt")))))
         b.put("generationConfig", JSONObject().put("responseModalities", org.json.JSONArray().put("TEXT").put("IMAGE")))
         val r = callAny(key, IMAGE_MODELS, b)
-        val parts = r.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts")
+        val parts = partsOf(r)
         var out: Bitmap? = null
         for (i in 0 until parts.length()) {
             val pt = parts.getJSONObject(i)

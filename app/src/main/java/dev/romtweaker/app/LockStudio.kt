@@ -58,8 +58,21 @@ object LockStudio {
         return v
     }
 
-    fun wallpaper(act: Activity): Drawable? =
-        try { WallpaperManager.getInstance(act).drawable } catch (e: Throwable) { null }
+    @Volatile private var blinkAt = 0L
+
+    /** Apaga y enciende la pantalla para ver el bloqueo; una sola vez cada 4 s aunque se llame muchas veces. */
+    fun screenBlink() {
+        val now = System.currentTimeMillis()
+        if (now - blinkAt < 4000L) return
+        blinkAt = now
+        Thread { try { Sx.su("input keyevent 223; sleep 1; input keyevent 224") } catch (e: Throwable) { } }.start()
+    }
+
+    fun wallpaper(act: Activity): Drawable? {
+        val b = StudioWall.cached()
+        if (b != null) return android.graphics.drawable.BitmapDrawable(act.resources, b)
+        return try { WallpaperManager.getInstance(act).drawable } catch (e: Throwable) { null }
+    }
 
     fun page(act: Activity, m: M3, say: (String) -> Unit, refresh: () -> Unit): View {
         val cfg = ClockCfg.load(act)
@@ -80,6 +93,12 @@ object LockStudio {
         val mt = ClockMetrics.load(act, compact)?.takeIf { it.gh < it.sh * 0.75f && it.gw > it.sw * 0.15f && it.gw <= it.sw }
         val ph = (pw * (if (mt != null) mt.sh.toFloat() / mt.sw else 2.16f)).toInt()
         val box = FrameLayout(act)
+        if (StudioWall.cached() == null && !StudioWall.attempted()) {
+            Thread {
+                StudioWall.get(act)
+                try { act.runOnUiThread { if (StudioWall.cached() != null) refresh() } } catch (e: Throwable) { }
+            }.start()
+        }
         val wd = wallpaper(act)
         if (wd != null) {
             val iv = ImageView(act)
@@ -99,10 +118,7 @@ object LockStudio {
             val sc = pw.toFloat() / mt.sw
             face.metrics = mt
             face.scale = sc
-            val fl = FrameLayout.LayoutParams((mt.gw * sc).toInt(), (mt.gh * sc).toInt())
-            fl.leftMargin = (mt.gx * sc).toInt()
-            fl.topMargin = (mt.gy * sc).toInt()
-            box.addView(face, fl)
+            box.addView(face, FlexPreview.layoutFor(mt, sc, face))
         } else {
             box.addView(face, FrameLayout.LayoutParams(-1, -1))
         }
@@ -124,7 +140,7 @@ object LockStudio {
         p.addView(box, bl)
 
         fun live() { face.cfg = cfg; face.refreshFx() }
-        fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", true)) LockXp.apply(cfg, true); if (lp.getBoolean("lk_live", false)) { Thread { Sx.su("input keyevent 223; sleep 1; input keyevent 224") }.start() }; refresh() }
+        fun commit() { cfg.save(act); if (lp.getBoolean("lk_native", true)) LockXp.apply(cfg, true); if (lp.getBoolean("lk_live", false)) { LockStudio.screenBlink() }; refresh() }
 
         val fm = RtFlow(act, m.dp(8))
         fm.addView(m.chip("Pantalla completa", !compact) { lp.edit().putBoolean("pv_compact", false).apply(); refresh() })

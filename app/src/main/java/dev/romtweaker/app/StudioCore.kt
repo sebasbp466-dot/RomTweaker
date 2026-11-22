@@ -185,15 +185,30 @@ object StudioWall {
     private var tried = false
     private var triedHi = false
 
-    fun reset() { bmp = null; tried = false; hi = null; triedHi = false }
+    @Volatile private var failAt = 0L
+    @Volatile private var failAtHi = 0L
+
+    @Synchronized fun reset() { bmp = null; tried = false; hi = null; triedHi = false; failAt = 0L; failAtHi = 0L }
+
+    fun cached(): Bitmap? = bmp
+    fun attempted(): Boolean = tried
+
+    private fun suBytes(su: Array<String>, cmd: String): ByteArray {
+        val p = ProcessBuilder(su[0], su[1], cmd).redirectErrorStream(false).start()
+        val box = arrayOfNulls<ByteArray>(1)
+        val t = Thread { try { box[0] = p.inputStream.readBytes() } catch (e: Throwable) { } }
+        t.start()
+        t.join(15000)
+        if (t.isAlive) { try { p.destroyForcibly() } catch (e: Throwable) { }; return ByteArray(0) }
+        try { p.waitFor() } catch (e: Throwable) { }
+        return box[0] ?: ByteArray(0)
+    }
 
     /** Dentro de la app: lee el archivo real del fondo con root (la API de Android lo oculta sin permiso de almacenamiento total). */
     private fun wallNames(): List<String> {
         val l = arrayListOf("wallpaper_lock", "wallpaper", "wallpaper_lock_orig", "wallpaper_orig")
         try {
-            val pr = ProcessBuilder("su", "-c", "ls /data/system/users/0/").start()
-            val t = pr.inputStream.bufferedReader().readText()
-            pr.waitFor()
+            val t = String(suBytes(arrayOf("su", "-c"), "ls /data/system/users/0/"))
             for (n in t.split("\n")) { val x = n.trim(); if (x.startsWith("wallpaper") && !x.endsWith(".xml") && !l.contains(x)) l.add(x) }
         } catch (e: Throwable) { }
         return l
@@ -203,9 +218,7 @@ object StudioWall {
         for (name in wallNames()) {
             for (su in listOf(arrayOf("su", "-c"), arrayOf("/data/adb/ksu/bin/su", "-c"), arrayOf("/system/xbin/su", "-c"))) {
                 try {
-                    val p = ProcessBuilder(su[0], su[1], "cat /data/system/users/0/$name").start()
-                    val bytes = p.inputStream.readBytes()
-                    p.waitFor()
+                    val bytes = suBytes(su, "cat /data/system/users/0/$name")
                     if (bytes.size < 2000) continue
                     val o = BitmapFactory.Options()
                     o.inJustDecodeBounds = true
@@ -287,19 +300,27 @@ object StudioWall {
         return out
     }
 
+    @Synchronized
     fun get(ctx: Context): Bitmap? {
-        if (bmp != null || tried) return bmp
+        if (bmp != null) return bmp
+        if (tried && System.currentTimeMillis() - failAt < 8000L) return null
+        val b = load(ctx, 600)
+        bmp = b
         tried = true
-        bmp = load(ctx, 600)
-        return bmp
+        if (b == null) failAt = System.currentTimeMillis()
+        return b
     }
 
     /** Versión de más resolución (profundidad). */
+    @Synchronized
     fun hi(ctx: Context): Bitmap? {
-        if (hi != null || triedHi) return hi
+        if (hi != null) return hi
+        if (triedHi && System.currentTimeMillis() - failAtHi < 8000L) return null
+        val b = load(ctx, 1800)
+        hi = b
         triedHi = true
-        hi = load(ctx, 1800)
-        return hi
+        if (b == null) failAtHi = System.currentTimeMillis()
+        return b
     }
 }
 
