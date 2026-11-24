@@ -570,8 +570,7 @@ class MainActivity : Activity() {
                         JSONObject(c.second)
                         File(profDir(), File(f).name).writeText(c.second)
                         n++
-                    } catch (e: Exception) {
-                    }
+                    } catch (e: Exception) { RtLog.swallow(e) }
                 }
             }
             runOnUiThread {

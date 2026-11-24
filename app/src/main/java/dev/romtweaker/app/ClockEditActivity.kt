@@ -115,12 +115,12 @@ class ClockEditActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        try { setShowWhenLocked(true) } catch (e: Throwable) { }
+        try { setShowWhenLocked(true) } catch (e: Throwable) { RtLog.swallow(e) }
         try {
             window.setDecorFitsSystemWindows(false)
             window.insetsController?.hide(WindowInsets.Type.systemBars())
             window.insetsController?.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         m = M3(this, true)
         val dm = resources.displayMetrics
         sw = dm.widthPixels
@@ -660,7 +660,7 @@ class ClockEditActivity : Activity() {
             sb.progressTintList = ColorStateList.valueOf(Hx.BLUE)
             sb.thumbTintList = ColorStateList.valueOf(Hx.BLUE)
             sb.progressBackgroundTintList = ColorStateList.valueOf(0x33000000)
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
     }
 
     private fun swatch(col: Int, sel: Boolean, click: () -> Unit): View {
@@ -781,11 +781,11 @@ class ClockEditActivity : Activity() {
                 "mono" -> t.typeface = Typeface.create(Typeface.MONOSPACE, f.w, false)
                 in StudioFont.assetFonts -> {
                     t.typeface = StudioFont.asset(this, f.font) ?: Typeface.DEFAULT
-                    if (f.font in StudioFont.varFonts) try { t.fontVariationSettings = "'wght' ${f.w}" } catch (e: Throwable) { }
+                    if (f.font in StudioFont.varFonts) try { t.fontVariationSettings = "'wght' ${f.w}" } catch (e: Throwable) { RtLog.swallow(e) }
                 }
                 else -> {
                     t.typeface = StudioFont.get()
-                    try { t.fontVariationSettings = "'wght' ${f.w},'wdth' ${f.wd},'ROND' ${f.ro}" } catch (e: Throwable) { }
+                    try { t.fontVariationSettings = "'wght' ${f.w},'wdth' ${f.wd},'ROND' ${f.ro}" } catch (e: Throwable) { RtLog.swallow(e) }
                 }
             }
             val sel = cfg.wght == f.w && cfg.wdth == f.wd && cfg.rond == f.ro && cfg.font == f.font
@@ -1078,7 +1078,7 @@ class ClockEditActivity : Activity() {
         try {
             val r = wBlur / 100f * 36f * resources.displayMetrics.density
             wallIv.setRenderEffect(if (wBlur > 0) RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         wallChanged()
     }
 
@@ -1118,7 +1118,7 @@ class ClockEditActivity : Activity() {
             val st = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
             sw2.thumbTintList = ColorStateList(st, intArrayOf(Color.WHITE, 0xFFFFFFFF.toInt()))
             sw2.trackTintList = ColorStateList(st, intArrayOf(Hx.BLUE, 0x44000000))
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         sw2.setOnCheckedChangeListener { _, v -> cb(v) }
         row.addView(sw2)
         return row
@@ -1409,11 +1409,15 @@ object StudioPush {
     } catch (e: Throwable) { false }
 
     fun push(p: android.content.SharedPreferences): Boolean {
-        var ok = bridge("putString", "sc_cfg", p.getString("sc_cfg", "") ?: "")
-        ok = bridge("putBool", "sc_on", p.getBoolean("sc_on", false)) && ok
-        ok = bridge("putBool", "ic_on", p.getBoolean("ic_on", false)) && ok
-        ok = bridge("putString", "depth_mask", p.getString("depth_mask", "") ?: "") && ok
-        ok = bridge("putString", "sticker", if (p.getString("sc_cfg", "")?.contains("sticker") == true || (p.getString("sc_cfg","") ?: "").contains("cs=")) (p.getString("sticker", "") ?: "") else "") && ok
+        val cfg = p.getString("sc_cfg", "") ?: ""
+        val stk = if (cfg.contains("sticker") || cfg.contains("cs=")) (p.getString("sticker", "") ?: "") else ""
+        val ok = Xp.putAll(
+            mapOf<String, Any>(
+                "sc_cfg" to cfg, "sc_on" to p.getBoolean("sc_on", false), "ic_on" to p.getBoolean("ic_on", false),
+                "depth_mask" to (p.getString("depth_mask", "") ?: ""), "sticker" to stk
+            )
+        )
+        RtLog.i("módulo", "ajustes del editor enviados: sc_on=" + p.getBoolean("sc_on", false) + " ic_on=" + p.getBoolean("ic_on", false) + " cfg=" + cfg.length + " caracteres ok=" + ok)
         return ok
     }
 

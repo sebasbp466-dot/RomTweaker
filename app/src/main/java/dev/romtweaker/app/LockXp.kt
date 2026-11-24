@@ -10,16 +10,14 @@ object LockXp {
     } catch (e: Throwable) { false }
 
     fun apply(cfg: ClockCfg, on: Boolean): Boolean {
-        var ok = call("putString", "lk_style", cfg.style)
-        ok = call("putString", "lk_color", cfg.color.toString()) && ok
-        ok = call("putString", "lk_accent", cfg.accent.toString()) && ok
-        ok = call("putString", "lk_glass", cfg.glass.toString()) && ok
-        ok = call("putString", "lk_filter", cfg.filter.toString()) && ok
-        ok = call("putString", "lk_weight", cfg.weight.toString()) && ok
-        ok = call("putString", "lk_wdth", cfg.wdth.toString()) && ok
-        ok = call("putString", "lk_rond", cfg.rond.toString()) && ok
-        ok = call("putString", "lk_slnt", cfg.slnt.toString()) && ok
-        ok = call("putBool", "lk_on", on) && ok
+        val ok = Xp.putAll(
+            mapOf<String, Any>(
+                "lk_style" to cfg.style, "lk_color" to cfg.color.toString(), "lk_accent" to cfg.accent.toString(),
+                "lk_glass" to cfg.glass.toString(), "lk_filter" to cfg.filter.toString(), "lk_weight" to cfg.weight.toString(),
+                "lk_wdth" to cfg.wdth.toString(), "lk_rond" to cfg.rond.toString(), "lk_slnt" to cfg.slnt.toString(), "lk_on" to on
+            )
+        )
+        RtLog.i("módulo", "estilo del reloj nativo enviado: estilo=" + cfg.style + " activo=" + on + " ok=" + ok)
         return ok
     }
 }

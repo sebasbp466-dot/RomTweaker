@@ -14,21 +14,35 @@ class ModuleMain : XposedModule() {
         const val CLOCK = "com.android.systemui.statusbar.policy.Clock"
     }
 
+    private fun warn(tag: String, msg: String) = Ev.warn(this, tag, msg)
+    private fun info(tag: String, msg: String) = Ev.info(this, tag, msg)
+
     override fun onModuleLoaded(param: ModuleLoadedParam) {
-        log(Log.INFO, TAG, "módulo cargado en ${param.processName}")
+        Ev.mod = this
+        try { dev.romtweaker.app.RtLog.sink = { lv, tg, m -> ModLog.add(lv, tg, m) } } catch (e: Throwable) { Ev.swallow(e) }
+        info(TAG, "módulo cargado en ${param.processName} (protocolo v" + dev.romtweaker.app.ModVer.MV + ", Android SDK " + android.os.Build.VERSION.SDK_INT + ")")
     }
 
     override fun onPackageReady(param: PackageReadyParam) {
         if (param.packageName != "com.android.systemui") return
         if (!param.isFirstPackage) return
-        val prefs: SharedPreferences? = try { getRemotePreferences("rt") } catch (e: Throwable) { null }
-        hookClock(param.classLoader, prefs)
-        hookLock2(param.classLoader, prefs)
-        hookWeight(param.classLoader, prefs)
-        hookLockSmall(param.classLoader, prefs)
-        try { IcModule.install(this, param.classLoader, prefs) } catch (e: Throwable) { log(Log.WARN, TAG, "IcModule: " + e) }
-        try { IcxHide.install(this, prefs) } catch (e: Throwable) { log(Log.WARN, TAG, "IcxHide: " + e) }
-        try { IcxScan.probe(this, param.classLoader) } catch (e: Throwable) { log(Log.WARN, TAG, "IcxScan: " + e) }
+        Ev.mod = this
+        if (SafeMode.tripped()) {
+            info(TAG, "modo seguro: SystemUI se reinició varias veces seguidas; el módulo no engancha nada durante 10 minutos")
+            Ev.later("safe", "SystemUI se reinició 4 o más veces en 60 s; el módulo se pausó 10 min", 6000L)
+            return
+        }
+        val prefs: SharedPreferences? = try { getRemotePreferences("rt") } catch (e: Throwable) { warn(TAG, "sin preferencias remotas: " + e); null }
+        Ev.step("reloj") { hookClock(param.classLoader, prefs) }
+        Ev.step("bloqueo") { hookLock2(param.classLoader, prefs) }
+        Ev.step("grosor") { hookWeight(param.classLoader, prefs) }
+        Ev.step("pequeno") { hookLockSmall(param.classLoader, prefs) }
+        Ev.step("estudio") { try { IcModule.install(this, param.classLoader, prefs) } catch (e: Throwable) { warn(TAG, "IcModule: " + Log.getStackTraceString(e)) } }
+        Ev.step("ocultar") { try { IcxHide.install(this, prefs) } catch (e: Throwable) { warn(TAG, "IcxHide: " + Log.getStackTraceString(e)) } }
+        Ev.step("analisis") { try { IcxScan.probe(this, param.classLoader) } catch (e: Throwable) { warn(TAG, "IcxScan: " + Log.getStackTraceString(e)) } }
+        Ev.watchPrefs(prefs)
+        info(TAG, "instalado: " + Ev.helloText())
+        Ev.later("hello", Ev.helloText(), 7000L)
     }
 
     private fun formatted(prefs: SharedPreferences?, orig: Any?): Any? {
@@ -53,7 +67,7 @@ class ModuleMain : XposedModule() {
             val t = target
             if (t != null) {
                 hook(t).intercept { chain -> formatted(prefs, chain.proceed()) }
-                log(Log.INFO, TAG, "reloj enganchado por método: ${t.name}")
+                info(TAG, "reloj enganchado por método: ${t.name}")
                 return
             }
             val st = TextView::class.java.getDeclaredMethod("setText", CharSequence::class.java, TextView.BufferType::class.java)
@@ -65,9 +79,9 @@ class ModuleMain : XposedModule() {
                     chain.proceed()
                 }
             }
-            log(Log.INFO, TAG, "reloj enganchado por TextView.setText (plan B)")
+            info(TAG, "reloj enganchado por TextView.setText (plan B)")
         } catch (e: Throwable) {
-            log(Log.WARN, TAG, "esta ROM no tiene el reloj esperado: ${e.message}")
+            warn(TAG, "esta ROM no tiene el reloj esperado: ${e.message}")
         }
     }
 
@@ -85,7 +99,7 @@ class ModuleMain : XposedModule() {
             liveViews[v] = true
             if (liveListener == null && prefs != null) {
                 val l = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-                    try { for (x in liveViews.keys.toList()) x.post { x.requestLayout(); x.invalidate() } } catch (e: Throwable) { }
+                    try { for (x in liveViews.keys.toList()) x.post { x.requestLayout(); x.invalidate() } } catch (e: Throwable) { Ev.swallow(e) }
                 }
                 liveListener = l
                 prefs.registerOnSharedPreferenceChangeListener(l)
@@ -118,7 +132,7 @@ class ModuleMain : XposedModule() {
             walk(v)
             if (arr.length() == 0) return
             val j = org.json.JSONObject()
-            j.put("mv", 2); j.put("sw", dm.widthPixels); j.put("sh", dm.heightPixels)
+            j.put("mv", dev.romtweaker.app.ModVer.MV); j.put("sw", dm.widthPixels); j.put("sh", dm.heightPixels)
             j.put("gx", loc[0]); j.put("gy", loc[1]); j.put("gw", v.width); j.put("gh", v.height)
             j.put("d", arr)
             val str = j.toString()
@@ -140,12 +154,12 @@ class ModuleMain : XposedModule() {
                     intent.putExtra("kind", kind)
                     intent.putExtra("json", str)
                     ctx.sendBroadcast(intent)
-                    log(Log.INFO, TAG, "medidas enviadas ($kind): " + str.take(200))
-                } catch (e: Throwable) { log(Log.WARN, TAG, "metricas: $e") }
+                    info(TAG, "medidas enviadas ($kind): " + str.take(200))
+                } catch (e: Throwable) { warn(TAG, "metricas: $e") }
             }
             mRun[kind] = r
             v.postDelayed(r, 700L)
-        } catch (e: Throwable) { log(Log.WARN, TAG, "metricas: $e") }
+        } catch (e: Throwable) { warn(TAG, "metricas: $e") }
     }
 
     private fun argb(c: Int, f: Float): Int = (c and 0x00FFFFFF) or ((f.coerceIn(0f, 1f) * 255).toInt() shl 24)
@@ -162,7 +176,7 @@ class ModuleMain : XposedModule() {
                     !(prefs?.getBoolean("lk_on", true) ?: true)) {
                     chain.proceed()
                 } else {
-                    if (seen.add(tv.javaClass.name)) log(Log.INFO, TAG, "dibuja ${tv.javaClass.name} h=${tv.height} prefs=${prefs != null}")
+                    if (seen.add(tv.javaClass.name)) info(TAG, "dibuja ${tv.javaClass.name} h=${tv.height} prefs=${prefs != null}")
                     val p = tv.paint
                     val os = p.shader
                     val ost = p.style
@@ -192,9 +206,9 @@ class ModuleMain : XposedModule() {
                     }
                 }
             }
-            log(Log.INFO, TAG, "reloj de bloqueo nativo enganchado")
+            info(TAG, "reloj de bloqueo nativo enganchado")
         } catch (e: Throwable) {
-            log(Log.WARN, TAG, "no pude enganchar el reloj de bloqueo: ${e.message}")
+            warn(TAG, "no pude enganchar el reloj de bloqueo: ${e.message}")
         }
     }
 
@@ -211,13 +225,13 @@ class ModuleMain : XposedModule() {
             val base = "com.android.systemui.shared.clocks.view.FlexClock"
             val grp = try { Class.forName(base + "ViewGroup", false, cl) } catch (e: Throwable) { null }
             val txt = try { Class.forName(base + "TextView", false, cl) } catch (e: Throwable) { null }
-            log(Log.INFO, TAG, "FlexClockViewGroup: " + chainOf(grp))
-            log(Log.INFO, TAG, "FlexClockTextView: " + chainOf(txt))
-            val target: Class<*> = grp ?: txt ?: run { log(Log.WARN, TAG, "no hay clases FlexClock en esta ROM"); return }
+            info(TAG, "FlexClockViewGroup: " + chainOf(grp))
+            info(TAG, "FlexClockTextView: " + chainOf(txt))
+            val target: Class<*> = grp ?: txt ?: run { warn(TAG, "no hay clases FlexClock en esta ROM"); return }
             val name = if (grp != null) "dispatchDraw" else "onDraw"
             var m: java.lang.reflect.Method? = null
             if (grp != null) {
-                try { log(Log.INFO, TAG, "FlexClockViewGroup declara: " + grp.declaredMethods.map { it.name }.distinct().sorted().joinToString(",").take(600)) } catch (e: Throwable) { }
+                try { info(TAG, "FlexClockViewGroup declara: " + grp.declaredMethods.map { it.name }.distinct().sorted().joinToString(",").take(600)) } catch (e: Throwable) { Ev.swallow(e) }
                 for (cand in listOf("dispatchDraw", "onLayout", "onMeasure")) {
                     if (m == null) m = grp.declaredMethods.firstOrNull { it.name == cand }
                 }
@@ -227,7 +241,7 @@ class ModuleMain : XposedModule() {
                 m = try { c.getDeclaredMethod(name, android.graphics.Canvas::class.java) } catch (e: Throwable) { null }
                 c = c.superclass
             }
-            val mm = m ?: run { log(Log.WARN, TAG, "no encontré $name en la jerarquía"); return }
+            val mm = m ?: run { warn(TAG, "no encontré $name en la jerarquía"); return }
             val seen = HashSet<String>()
             val agsl = """
                 uniform shader inp;
@@ -268,10 +282,10 @@ class ModuleMain : XposedModule() {
                 if (v == null || !v.javaClass.name.startsWith(base)) {
                     chain.proceed()
                 } else if (!(prefs?.getBoolean("lk_on", true) ?: true)) {
-                    if (applied.remove(v) != null) v.post { try { v.setRenderEffect(null) } catch (e: Throwable) { } }
+                    if (applied.remove(v) != null) v.post { try { v.setRenderEffect(null) } catch (e: Throwable) { Ev.swallow(e) } }
                     chain.proceed()
                 } else {
-                    if (seen.add(v.javaClass.name)) log(Log.INFO, TAG, "dibuja ${v.javaClass.name} ${v.width}x${v.height}")
+                    if (seen.add(v.javaClass.name)) info(TAG, "dibuja ${v.javaClass.name} ${v.width}x${v.height}")
                     diag(v)
                     pushMetrics(v, "stack", prefs)
                     val st = prefs?.getString("lk_style", "glass") ?: "glass"
@@ -299,18 +313,18 @@ class ModuleMain : XposedModule() {
                                     rs.setFloatUniform("c2", android.graphics.Color.red(c2) / 255f, android.graphics.Color.green(c2) / 255f, android.graphics.Color.blue(c2) / 255f, a2)
                                     v.setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(rs, "inp"))
                                     
-                                    log(Log.INFO, TAG, "efecto aplicado: $st h=$hh")
+                                    info(TAG, "efecto aplicado: $st h=$hh")
                                 }
-                            } catch (e: Throwable) { log(Log.WARN, TAG, "renderEffect: $e") }
+                            } catch (e: Throwable) { warn(TAG, "renderEffect: $e") }
                         }
                     }
                     
                     chain.proceed()
                 }
             }
-            log(Log.INFO, TAG, "reloj de bloqueo (v2) enganchado en ${mm.declaringClass.name}.${mm.name}")
+            info(TAG, "reloj de bloqueo (v2) enganchado en ${mm.declaringClass.name}.${mm.name}")
         } catch (e: Throwable) {
-            log(Log.WARN, TAG, "hookLock2 falló: ${e.message}")
+            warn(TAG, "hookLock2 falló: ${e.message}")
         }
     }
 
@@ -318,7 +332,7 @@ class ModuleMain : XposedModule() {
         if (v is android.view.ViewGroup) {
             for (i in 0 until v.childCount) applyWeight(v.getChildAt(i), w)
         } else if (v is TextView) {
-            try { val want = "'wght' " + w; if (v.fontVariationSettings != want) v.setFontVariationSettings(want) } catch (e: Throwable) { }
+            try { val want = "'wght' " + w; if (v.fontVariationSettings != want) v.setFontVariationSettings(want) } catch (e: Throwable) { Ev.swallow(e) }
         }
     }
 
@@ -348,15 +362,15 @@ class ModuleMain : XposedModule() {
                 }
             }
             walk(v)
-            log(Log.INFO, TAG, sb.toString())
+            info(TAG, sb.toString())
             val names = LinkedHashSet<String>()
             var c: Class<*>? = first
             while (c != null && c != TextView::class.java) {
                 for (m in c.declaredMethods) if (Regex("(?i)style|weight|variation|axis|font|anim").containsMatchIn(m.name)) names.add(m.name)
                 c = c.superclass
             }
-            log(Log.INFO, TAG, "metodos: " + names.joinToString(",").take(700))
-        } catch (e: Throwable) { log(Log.WARN, TAG, "diag: $e") }
+            info(TAG, "metodos: " + names.joinToString(",").take(700))
+        } catch (e: Throwable) { warn(TAG, "diag: $e") }
     }
 
     private fun setWght(s: String, w: Int): String {
@@ -373,7 +387,7 @@ class ModuleMain : XposedModule() {
         while (c != null && c != Any::class.java) {
             for (f in c.declaredFields) {
                 if (java.lang.reflect.Modifier.isStatic(f.modifiers)) continue
-                try { f.isAccessible = true; sb.append(f.name).append("=").append(("" + f.get(o)).take(140)).append("; ") } catch (e: Throwable) { }
+                try { f.isAccessible = true; sb.append(f.name).append("=").append(("" + f.get(o)).take(140)).append("; ") } catch (e: Throwable) { Ev.swallow(e) }
             }
             c = c.superclass
         }
@@ -393,7 +407,7 @@ class ModuleMain : XposedModule() {
                 if (fv.type == java.lang.Double.TYPE) fv.set(o, w.toDouble()) else fv.set(o, w.toFloat())
                 changed = true
             }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { Ev.swallow(e) }
         var c: Class<*>? = o.javaClass
         while (c != null && c != Any::class.java) {
             for (f in c.declaredFields) {
@@ -416,7 +430,7 @@ class ModuleMain : XposedModule() {
                     } else if (v != null && v.javaClass.name.startsWith("com.android.systemui")) {
                         if (forceWght(v, w, depth + 1)) changed = true
                     }
-                } catch (e: Throwable) { }
+                } catch (e: Throwable) { Ev.swallow(e) }
             }
             c = c.superclass
         }
@@ -437,7 +451,7 @@ class ModuleMain : XposedModule() {
                         hook(m).intercept { chain ->
                             val r = chain.proceed()
                             if (r != null) {
-                                if (dumped.add(m.name)) log(Log.INFO, TAG, "dump " + m.name + ": " + dumpObj(r))
+                                if (dumped.add(m.name)) info(TAG, "dump " + m.name + ": " + dumpObj(r))
                                 val wt = (prefs?.getString("lk_weight", "0") ?: "0").toIntOrNull() ?: 0
                                 val on = prefs?.getBoolean("lk_on", true) ?: true
                                 if (on) {
@@ -459,8 +473,8 @@ class ModuleMain : XposedModule() {
                 }
                 c = c.superclass
             }
-            log(Log.INFO, TAG, "grosor: " + n + " metodos enganchados")
-        } catch (e: Throwable) { log(Log.WARN, TAG, "hookWeight: " + e) }
+            info(TAG, "grosor: " + n + " metodos enganchados")
+        } catch (e: Throwable) { warn(TAG, "hookWeight: " + e) }
     }
 
     private fun setAxis(s: String, k: String, w: Int): String {
@@ -483,7 +497,7 @@ class ModuleMain : XposedModule() {
                 if (fv.type == java.lang.Double.TYPE) fv.set(o, w.toDouble()) else fv.set(o, w.toFloat())
                 changed = true
             }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { Ev.swallow(e) }
         var c: Class<*>? = o.javaClass
         while (c != null && c != Any::class.java) {
             for (f in c.declaredFields) {
@@ -510,7 +524,7 @@ class ModuleMain : XposedModule() {
                     } else if (v != null && v.javaClass.name.startsWith("com.android.systemui")) {
                         if (forceAx(v, ax, depth + 1)) changed = true
                     }
-                } catch (e: Throwable) { }
+                } catch (e: Throwable) { Ev.swallow(e) }
             }
             c = c.superclass
         }
@@ -541,9 +555,9 @@ class ModuleMain : XposedModule() {
                     rs.setFloatUniform("c1", android.graphics.Color.red(col) / 255f, android.graphics.Color.green(col) / 255f, android.graphics.Color.blue(col) / 255f, a1)
                     rs.setFloatUniform("c2", android.graphics.Color.red(c2) / 255f, android.graphics.Color.green(c2) / 255f, android.graphics.Color.blue(c2) / 255f, a2)
                     v.setRenderEffect(android.graphics.RenderEffect.createRuntimeShaderEffect(rs, "inp"))
-                    log(Log.INFO, TAG, "efecto (reloj pequeno) aplicado: " + st)
+                    info(TAG, "efecto (reloj pequeno) aplicado: " + st)
                 }
-            } catch (e: Throwable) { log(Log.WARN, TAG, "fxApply: " + e) }
+            } catch (e: Throwable) { warn(TAG, "fxApply: " + e) }
         }
     }
 
@@ -558,7 +572,7 @@ class ModuleMain : XposedModule() {
                 m = try { c.getDeclaredMethod("onDraw", android.graphics.Canvas::class.java) } catch (e: Throwable) { null }
                 c = c.superclass
             }
-            val mm = m ?: run { log(Log.WARN, TAG, "reloj pequeno: sin onDraw propio"); return }
+            val mm = m ?: run { warn(TAG, "reloj pequeno: sin onDraw propio"); return }
             val applied = java.util.WeakHashMap<android.view.View, String>()
             hook(mm).intercept { chain ->
                 val v = chain.thisObject as? android.view.View
@@ -570,7 +584,7 @@ class ModuleMain : XposedModule() {
                 }
                 chain.proceed()
             }
-            log(Log.INFO, TAG, "reloj pequeno enganchado en " + mm.declaringClass.name)
-        } catch (e: Throwable) { log(Log.WARN, TAG, "hookLockSmall: " + e) }
+            info(TAG, "reloj pequeno enganchado en " + mm.declaringClass.name)
+        } catch (e: Throwable) { warn(TAG, "hookLockSmall: " + e) }
     }
 }

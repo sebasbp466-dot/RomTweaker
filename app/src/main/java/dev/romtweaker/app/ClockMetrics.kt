@@ -55,5 +55,6 @@ class ClockMetricsReceiver : BroadcastReceiver() {
             if (o.getInt("sw") <= 0 || o.getInt("gw") <= 0 || o.getInt("gh") <= 0 || o.getJSONArray("d").length() > 16) return
         } catch (e: Throwable) { return }
         c.getSharedPreferences("lockmetrics", Context.MODE_PRIVATE).edit().putString(k, j).putLong("t_" + k, System.currentTimeMillis()).apply()
+        RtLog.d("medidas", k + " recibidas (" + j.length + " bytes)")
     }
 }

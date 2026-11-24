@@ -43,8 +43,7 @@ object ShapeLib {
                 val p = l.split("|")
                 if (p.size >= 3) res.add(Shape(p[0].trim(), p[1].trim(), p[2].trim()))
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { RtLog.swallow(e) }
         return res
     }
 

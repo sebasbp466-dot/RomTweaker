@@ -193,8 +193,7 @@ class BootReceiver : BroadcastReceiver() {
         if (ctx.getSharedPreferences("ui", Context.MODE_PRIVATE).getBoolean("cc", false)) {
             try {
                 ctx.startForegroundService(Intent(ctx, ControlCenterService::class.java))
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { RtLog.swallow(e) }
         }
     }
 }
@@ -230,7 +229,7 @@ class ControlCenterService : Service() {
     }
 
     private fun startFg() {
-        try { startFg2() } catch (e: Throwable) { try { android.util.Log.w("RomTweaker", "fg: " + e) } catch (x: Throwable) { } }
+        try { startFg2() } catch (e: Throwable) { try { android.util.Log.w("RomTweaker", "fg: " + e) } catch (x: Throwable) { RtLog.swallow(x) } }
     }
 
     private fun startFg2() {
@@ -290,8 +289,7 @@ class ControlCenterService : Service() {
         try {
             wm.addView(v, lp)
             handle = v
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { RtLog.swallow(e) }
     }
 
     private fun style(tv: TextView, ui: Ui, on: Boolean) {
@@ -471,8 +469,7 @@ class ControlCenterService : Service() {
         if (pn != null) {
             try {
                 wm.removeView(pn)
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { RtLog.swallow(e) }
         }
         panel = null
     }
@@ -483,8 +480,7 @@ class ControlCenterService : Service() {
         if (h != null) {
             try {
                 wm.removeView(h)
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { RtLog.swallow(e) }
         }
         handle = null
         super.onDestroy()

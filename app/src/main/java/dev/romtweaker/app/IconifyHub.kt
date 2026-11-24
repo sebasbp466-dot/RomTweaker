@@ -17,6 +17,14 @@ object Sx {
     fun q(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
     fun su(cmd: String): Pair<Int, String> {
+        val t0 = System.currentTimeMillis()
+        val r = su0(cmd)
+        RtLog.cmd("sx", cmd, r.first, r.second, System.currentTimeMillis() - t0)
+        return r
+    }
+
+    /** Solo se prueba otro "su" cuando el binario no se puede ejecutar; un código 127 del propio comando NO repite el comando. Tiempo máximo: 90 s. */
+    private fun su0(cmd: String): Pair<Int, String> {
         val vs = variants(cmd)
         val order = ArrayList<Int>()
         if (variant >= 0) order.add(variant)
@@ -25,13 +33,22 @@ object Sx {
         for (i in order) {
             try {
                 val pr = ProcessBuilder(*vs[i]).redirectErrorStream(true).start()
-                val out = pr.inputStream.bufferedReader().readText()
-                val code = pr.waitFor()
-                if (code == 127) { last = Pair(code, out.trim()); continue }
+                val sb = StringBuilder()
+                val rd = Thread { try { sb.append(pr.inputStream.bufferedReader().readText()) } catch (e: Exception) { RtLog.swallow(e) } }
+                rd.start()
+                if (!pr.waitFor(90, java.util.concurrent.TimeUnit.SECONDS)) {
+                    try { pr.destroyForcibly() } catch (e: Exception) { RtLog.swallow(e) }
+                    rd.join(500)
+                    return Pair(-2, "tiempo agotado (90 s): " + cmd.take(80))
+                }
+                rd.join(3000)
                 variant = i
-                return Pair(code, out.trim())
+                return Pair(pr.exitValue(), sb.toString().trim())
+            } catch (e: java.io.IOException) {
+                last = Pair(-1, e.message ?: "error")
             } catch (e: Exception) {
                 last = Pair(-1, e.message ?: "error")
+                break
             }
         }
         return last
@@ -57,8 +74,7 @@ object IcoCat {
                     if (parts.isNotEmpty()) out.add(IcoItem(p[0], p[1], parts))
                 }
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { RtLog.swallow(e) }
         return out
     }
 }
@@ -130,7 +146,7 @@ object IcoOps {
                 Sx.su("rm -f $OVL/${p.id}.apk")
             } else {
                 bad++
-                try { moduleAdd(ctx, p); viaMod = true } catch (e: Exception) { }
+                try { moduleAdd(ctx, p); viaMod = true } catch (e: Exception) { RtLog.swallow(e) }
             }
             if (p.target == "com.android.systemui") sysui = true
         }
@@ -178,6 +194,12 @@ object Xp {
     fun putString(k: String, v: String): Boolean {
         val b = br() ?: return false
         return try { b.javaClass.getMethod("putString", String::class.java, String::class.java).invoke(b, k, v) as Boolean } catch (e: Throwable) { false }
+    }
+
+    /** Envía varios ajustes en una sola edición (el módulo los ve todos a la vez). */
+    fun putAll(m: Map<String, Any>): Boolean {
+        val b = br() ?: return false
+        return try { b.javaClass.getMethod("putAll", Map::class.java).invoke(b, m) as Boolean } catch (e: Throwable) { RtLog.swallow(e); false }
     }
 
     fun putBool(k: String, v: Boolean): Boolean {

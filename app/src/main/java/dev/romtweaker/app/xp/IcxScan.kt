@@ -216,14 +216,14 @@ object IcxScan {
                 val e = try { Class.forName(f, false, cl); true } catch (t: Throwable) { false }
                 if (e) ok++ else miss.add(c)
             }
-            x.log(Log.INFO, TAG, "cls: ${cl.javaClass.simpleName} ok=$ok/${classes.size}")
+            Ev.info(x, TAG, "cls: ${cl.javaClass.simpleName} ok=$ok/${classes.size}")
             var i = 0
             while (i < miss.size) {
                 val part = miss.subList(i, minOf(i + 25, miss.size)).joinToString(";")
-                x.log(Log.INFO, TAG, "cls-no: $part")
+                Ev.info(x, TAG, "cls-no: $part")
                 i += 25
             }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { Ev.swallow(e) }
     }
 
     private fun nm(v: View): String {
@@ -247,10 +247,10 @@ object IcxScan {
             buf.append(name).append('|').append(cn).append('|').append(chain).append(" ; ")
             n++
             if (n >= 30 || total >= CAP) {
-                x.log(Log.INFO, TAG, "vw: " + buf)
+                Ev.info(x, TAG, "vw: " + buf)
                 buf.setLength(0)
                 n = 0
             }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { Ev.swallow(e) }
     }
 }

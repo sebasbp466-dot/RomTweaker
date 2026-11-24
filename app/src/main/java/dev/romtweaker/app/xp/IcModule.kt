@@ -35,6 +35,13 @@ object IcModule {
     private val stock = java.util.WeakHashMap<View, Boolean>()
     private var mirroring = false
     private var depthRef: WeakReference<View>? = null
+    private var kgRef: WeakReference<View>? = null
+    private var lpHooked = false
+    private var snapped = false
+    private val savedTop = HashMap<Int, IntArray>()
+    private val ANCH = listOf("nssl_placeholder", "aod_notification_icon_container")
+    private var wId = 0
+    private var wIdAt = 0L
 
     private fun find(c0: Class<*>?, name: String): java.lang.reflect.Method? {
         var c = c0
@@ -59,10 +66,11 @@ object IcModule {
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
             val opt = android.app.ActivityOptions.makeCustomAnimation(app, 0, 0).toBundle()
             app.startActivity(i, opt)
-            x.log(Log.INFO, TAG, "lp: galería lanzada")
+            Ev.info(x, TAG, "lp: galería lanzada")
+            minimizeKg()
             true
         } catch (e: Throwable) {
-            x.log(Log.WARN, TAG, "lp: fallo al lanzar " + Log.getStackTraceString(e))
+            Ev.warn(x, TAG, "lp: fallo al lanzar " + Log.getStackTraceString(e))
             false
         }
     }
@@ -87,13 +95,13 @@ object IcModule {
                         lpTouch(x, v, ev)
                     }
                 } catch (e: Throwable) {
-                    if (errs++ < 5) x.log(Log.WARN, TAG, "lp: error touch " + Log.getStackTraceString(e))
+                    if (errs++ < 5) Ev.warn(x, TAG, "lp: error touch " + Log.getStackTraceString(e))
                 }
                 chain.proceed()
             }
-            x.log(Log.INFO, TAG, "lp: detector de toque instalado")
+            Ev.info(x, TAG, "lp: detector de toque instalado")
         } catch (e: Throwable) {
-            x.log(Log.WARN, TAG, "lp: no pude instalar el detector " + Log.getStackTraceString(e))
+            Ev.warn(x, TAG, "lp: no pude instalar el detector " + Log.getStackTraceString(e))
         }
     }
 
@@ -108,7 +116,9 @@ object IcModule {
             if (id == 0 || v.findViewById<View>(id) == null) return
             val kg = v.context.getSystemService(android.app.KeyguardManager::class.java)
             if (kg == null || !kg.isKeyguardLocked) return
-            if (!lpSeen) { lpSeen = true; x.log(Log.INFO, TAG, "lp: bloqueo detectado, esperando pulsación larga") }
+            if (!lpSeen) { lpSeen = true; Ev.info(x, TAG, "lp: bloqueo detectado, esperando pulsación larga" + (if (lpHooked) " (la detecta el sistema)" else "")) }
+            kgRef = WeakReference(v.findViewById<View>(id))
+            if (overNotification(v, ev)) return
             val h = v.height.toFloat()
             if (ev.y < h * 0.10f || ev.y > h * 0.82f) return
             lpX = ev.x; lpY = ev.y
@@ -119,12 +129,7 @@ object IcModule {
             val r = Runnable {
                 lpRun = null
                 v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                val k = lpKg
-                // el bloqueo se "minimiza" mientras aparece la galería
-                k?.animate()?.cancel()
-                k?.animate()?.scaleX(0.80f)?.scaleY(0.80f)?.alpha(0f)?.setDuration(330)?.setInterpolator(android.view.animation.DecelerateInterpolator(1.6f))?.start()
                 launchGallery(x)
-                if (k != null) k.postDelayed({ k.animate().cancel(); k.scaleX = 1f; k.scaleY = 1f; k.alpha = 1f }, 1100)
             }
             lpRun = r
             v.postDelayed(r, 650)
@@ -156,9 +161,10 @@ object IcModule {
                     n++
                 }
             }
-            x.log(Log.INFO, TAG, "lp: onLongPress enganchado en $n métodos")
+            lpHooked = n > 0
+            Ev.info(x, TAG, "lp: onLongPress enganchado en $n métodos")
         } catch (e: Throwable) {
-            x.log(Log.WARN, TAG, "lp: error " + Log.getStackTraceString(e))
+            Ev.warn(x, TAG, "lp: error " + Log.getStackTraceString(e))
         }
     }
 
@@ -172,7 +178,7 @@ object IcModule {
             val list = ArrayList<java.lang.reflect.Method>()
             find(grp, "dispatchDraw")?.let { if (done.add(it)) list.add(it) }
             find(txt, "onDraw")?.let { if (done.add(it)) list.add(it) }
-            if (list.isEmpty()) { x.log(Log.WARN, TAG, "ic: sin clases FlexClock"); return }
+            if (list.isEmpty()) { Ev.warn(x, TAG, "ic: sin clases FlexClock"); return }
             for (mm in list) {
                 x.hook(mm).intercept { chain ->
                     val v = chain.thisObject as? View
@@ -184,7 +190,7 @@ object IcModule {
                         val on = prefs?.getBoolean("ic_on", false) ?: false
                         var hide = false
                         try { hide = handle(x, v, prefs, on) } catch (e: Throwable) {
-                            if (errs++ < 5) x.log(Log.WARN, TAG, "ic: error " + Log.getStackTraceString(e))
+                            if (errs++ < 5) Ev.warn(x, TAG, "ic: error " + Log.getStackTraceString(e))
                         }
                         if (hide) null else chain.proceed()
                     }
@@ -200,20 +206,20 @@ object IcModule {
                         try {
                             val root = rootRef?.get()
                             val c = cont?.get()
-                            if (root != null && c != null && c.parent === root) root.post { try { anchor(root, c.id) } catch (e: Throwable) { } }
-                        } catch (e: Throwable) { }
+                            if (root != null && c != null && c.parent === root) root.post { try { if (!anchored(root, c.id)) anchor(root, c.id) } catch (e: Throwable) { Ev.swallow(e) } }
+                        } catch (e: Throwable) { Ev.swallow(e) }
                         r
                     }
-                    x.log(Log.INFO, TAG, "ic: ancla de notificaciones en $sn")
-                } catch (e: Throwable) { x.log(Log.INFO, TAG, "ic: sin $sn en esta ROM") }
+                    Ev.info(x, TAG, "ic: ancla de notificaciones en $sn")
+                } catch (e: Throwable) { Ev.info(x, TAG, "ic: sin $sn en esta ROM") }
             }
             val l = SharedPreferences.OnSharedPreferenceChangeListener { _, k ->
-                if (k != null && k.startsWith("ic_")) lastView?.get()?.let { v -> v.post { try { v.invalidate(); (v.parent as? View)?.invalidate() } catch (e: Throwable) { } } }
+                if (k != null && (k.startsWith("ic_") || k.startsWith("sc_") || k == "depth_mask" || k == "sticker")) lastView?.get()?.let { v -> v.post { try { v.invalidate(); (v.parent as? View)?.invalidate() } catch (e: Throwable) { Ev.swallow(e) } } }
             }
             listener = l
             prefs?.registerOnSharedPreferenceChangeListener(l)
-            x.log(Log.INFO, TAG, "ic: instalado (" + list.size + " hooks)")
-        } catch (e: Throwable) { x.log(Log.WARN, TAG, "ic: fallo instalando " + e) }
+            Ev.info(x, TAG, "ic: instalado (" + list.size + " hooks)")
+        } catch (e: Throwable) { Ev.warn(x, TAG, "ic: fallo instalando " + e) }
     }
 
     private fun root(v: View): ViewGroup? {
@@ -238,8 +244,8 @@ object IcModule {
         if (!on && !sc) {
             if (cur != null) {
                 cont = null; contKey = ""
-                depthRef?.get()?.let { dv -> v.post { try { (dv.parent as? ViewGroup)?.removeView(dv) } catch (e: Throwable) { } } }; depthRef = null
-                v.post { try { val r = cur.parent as? ViewGroup; r?.removeView(cur); r?.let { hideDate(it, false); it.requestLayout() } } catch (e: Throwable) { } }
+                depthRef?.get()?.let { dv -> v.post { try { (dv.parent as? ViewGroup)?.removeView(dv) } catch (e: Throwable) { Ev.swallow(e) } } }; depthRef = null
+                v.post { try { val r = cur.parent as? ViewGroup; r?.removeView(cur); r?.let { restoreAnchors(it); hideDate(it, false); it.requestLayout() } } catch (e: Throwable) { Ev.swallow(e) } }
             }
             return false
         }
@@ -253,15 +259,19 @@ object IcModule {
         val dmask = if (sc) (prefs?.getString("depth_mask", "") ?: "") else ""
         val stk = if (sc) (prefs?.getString("sticker", "") ?: "") else ""
         if (stk != dev.romtweaker.app.StudioSticker.b64) dev.romtweaker.app.StudioSticker.b64 = stk
-        val wid = try { android.app.WallpaperManager.getInstance(v.context).getWallpaperId(android.app.WallpaperManager.FLAG_LOCK) } catch (e: Throwable) { 0 }
+        val wid = wallId(v.context)
         val key = if (sc) "S|$scCfg|${dmask.length}|${stk.length}|$wid" else "$n|$top|$bot|$scl|$hd"
         val rr = root(v)
         val healthy = cur != null && cur.isAttachedToWindow && key == contKey && cur.parent === rr && cur.childCount > 0 && cur.visibility == View.VISIBLE &&
             (cur.width > 0 || !cur.isLaidOut) && (cur.getChildAt(0)?.let { it.width > 0 || !it.isLaidOut } ?: false)
-        if (healthy) { startMirror(cur!!); return true }
+        if (healthy) {
+            startMirror(cur!!)
+            if (!snapped) { snapped = true; v.postDelayed({ snap("primer bloqueo sano", false) }, 3000L) }
+            return true
+        }
         if (cur != null && cur.isAttachedToWindow && key == contKey && cur.parent === rr) {
             // contenedor roto: se repara y, mientras tanto, se deja dibujar el reloj de serie
-            x.log(Log.INFO, TAG, "ic: reparando contenedor w=" + cur.width + " h=" + cur.height + " hijos=" + cur.childCount + " a=" + cur.alpha)
+            Ev.info(x, TAG, "ic: reparando contenedor w=" + cur.width + " h=" + cur.height + " hijos=" + cur.childCount + " a=" + cur.alpha)
             cur.visibility = View.VISIBLE; cur.alpha = 1f
             contKey = ""
         }
@@ -270,7 +280,7 @@ object IcModule {
         building = true
         v.post {
             try { build(x, r, cur, n, top, bot, scl, if (sc) true else hd, key, if (sc) scCfg else null, dmask) }
-            catch (e: Throwable) { contKey = ""; hideDate(r, false); x.log(Log.WARN, TAG, "ic: build " + Log.getStackTraceString(e)) }
+            catch (e: Throwable) { contKey = ""; hideDate(r, false); Ev.warn(x, TAG, "ic: build " + Log.getStackTraceString(e)) }
             finally { building = false }
             v.invalidate()
         }
@@ -288,7 +298,7 @@ object IcModule {
                     val cc = cont?.get()
                     val r = rootRef?.get()
                     if (cc == null || r == null || !cc.isAttachedToWindow) { mirroring = false; return }
-                    if (!r.isShown) { Choreographer.getInstance().postFrameCallbackDelayed(this, 250); return }
+                    if (!r.isShown) { mirroring = false; return }
                     var best = -1f
                     var bty = 0f
                     for (e in stock.entries) {
@@ -324,7 +334,7 @@ object IcModule {
         val id = r.resources.getIdentifier("keyguard_slice_view", "id", r.context.packageName)
         return if (id != 0) r.findViewById(id) else null
     }
-    private fun hideDate(r: ViewGroup, hide: Boolean) { try { dateView(r)?.setRenderEffect(if (hide) blank() else null) } catch (e: Throwable) { } }
+    private fun hideDate(r: ViewGroup, hide: Boolean) { try { dateView(r)?.setRenderEffect(if (hide) blank() else null) } catch (e: Throwable) { Ev.swallow(e) } }
 
     private fun cap(s: String): String {
         val sb = StringBuilder(s.length)
@@ -367,7 +377,7 @@ object IcModule {
         } else {
             val pkg = ctx.createPackageContext(APP, Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY)
             val id = pkg.resources.getIdentifier("preview_lockscreen_clock_$n", "layout", APP)
-            if (id == 0) { x.log(Log.WARN, TAG, "ic: no existe el layout $n en la app"); return }
+            if (id == 0) { Ev.warn(x, TAG, "ic: no existe el layout $n en la app"); return }
             inflated = LayoutInflater.from(pkg).inflate(id, null)
             if (n != 10) titleAll(inflated)
             if (sc != 100) scaleText(inflated, sc / 100f)
@@ -399,8 +409,8 @@ object IcModule {
         rootRef = WeakReference(r)
         contKey = key
         hideDate(r, hd)
-        try { anchor(r, c.id) } catch (e: Throwable) { x.log(Log.WARN, TAG, "ic: ancla " + e) }
-        x.log(Log.INFO, TAG, "ic: reloj " + (if (studio != null) "estudio" else n.toString()) + " top=$top bottom=$bot escala=$sc")
+        try { if (!anchored(r, c.id)) anchor(r, c.id) } catch (e: Throwable) { Ev.warn(x, TAG, "ic: ancla " + Log.getStackTraceString(e)) }
+        Ev.info(x, TAG, "ic: reloj " + (if (studio != null) "estudio" else n.toString()) + " top=$top bottom=$bot escala=$sc")
         // profundidad: sujeto del fondo por delante del reloj
         try {
             depthRef?.get()?.let { dv -> (dv.parent as? ViewGroup)?.removeView(dv) }
@@ -423,15 +433,122 @@ object IcModule {
                     dv.layoutParams = lp
                     r.addView(dv)
                     depthRef = WeakReference(dv)
-                    x.log(Log.INFO, TAG, "ic: profundidad activa")
-                } else x.log(Log.WARN, TAG, "ic: profundidad sin máscara o fondo")
+                    Ev.info(x, TAG, "ic: profundidad activa")
+                } else Ev.warn(x, TAG, "ic: profundidad sin máscara o fondo")
             }
-        } catch (e: Throwable) { x.log(Log.WARN, TAG, "ic: profundidad " + e) }
+        } catch (e: Throwable) { Ev.warn(x, TAG, "ic: profundidad " + e) }
         startMirror(c)
+    }
+
+    private fun fld(lp: Any, n: String): Int = try { lp.javaClass.getField(n).getInt(lp) } catch (e: Throwable) { -2 }
+    private fun setFld(lp: Any, n: String, v: Int) { try { lp.javaClass.getField(n).setInt(lp, v) } catch (e: Throwable) { Ev.swallow(e) } }
+
+    private fun anchoredViews(r: ViewGroup): List<View> {
+        val l = ArrayList<View>()
+        for (name in ANCH) {
+            val id = r.resources.getIdentifier(name, "id", r.context.packageName)
+            if (id != 0) r.findViewById<View>(id)?.let { l.add(it) }
+        }
+        return l
+    }
+
+    /** ¿Las notificaciones ya cuelgan de nuestro contenedor? Así no se repite el trabajo (ni el parpadeo) en cada cambio. */
+    private fun anchored(r: ViewGroup, cid: Int): Boolean {
+        val vs = anchoredViews(r)
+        if (vs.isEmpty()) return false
+        for (v in vs) {
+            val lp = v.layoutParams ?: return false
+            if (fld(lp, "topToBottom") != cid) return false
+        }
+        return true
+    }
+
+    /** Guarda de qué colgaban las notificaciones antes de nuestro ancla, para devolverlas a su sitio al quitar el reloj. */
+    private fun saveAnchors(r: ViewGroup, cid: Int) {
+        try {
+            for (v in anchoredViews(r)) {
+                val lp = v.layoutParams ?: continue
+                if (fld(lp, "topToBottom") != cid) savedTop[v.id] = intArrayOf(fld(lp, "topToTop"), fld(lp, "topToBottom"))
+            }
+        } catch (e: Throwable) { Ev.swallow(e) }
+    }
+
+    private fun restoreAnchors(r: ViewGroup) {
+        try {
+            val n = savedTop.size
+            for ((id, a) in savedTop) {
+                val v = r.findViewById<View>(id) ?: continue
+                val lp = v.layoutParams ?: continue
+                setFld(lp, "topToTop", a[0])
+                setFld(lp, "topToBottom", a[1])
+                v.layoutParams = lp
+            }
+            savedTop.clear()
+            r.requestLayout()
+            Ev.mod?.let { Ev.info(it, TAG, "ic: notificaciones devueltas a su sitio original ($n)") }
+        } catch (e: Throwable) { Ev.swallow(e) }
+    }
+
+    private fun wallId(c: Context): Int {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (wIdAt != 0L && now - wIdAt < 2000L) return wId
+        wIdAt = now
+        wId = try { android.app.WallpaperManager.getInstance(c).getWallpaperId(android.app.WallpaperManager.FLAG_LOCK) } catch (e: Throwable) { Ev.swallow(e); 0 }
+        return wId
+    }
+
+    /** El bloqueo se "minimiza" mientras aparece la galería (sirve tanto si la pulsación la detecta el sistema como si la detectamos nosotros). */
+    private fun minimizeKg() {
+        try {
+            val k = kgRef?.get() ?: return
+            k.post {
+                k.animate().cancel()
+                k.animate().scaleX(0.80f).scaleY(0.80f).alpha(0f).setDuration(330).setInterpolator(android.view.animation.DecelerateInterpolator(1.6f)).start()
+                k.postDelayed({ k.animate().cancel(); k.scaleX = 1f; k.scaleY = 1f; k.alpha = 1f }, 1100)
+            }
+        } catch (e: Throwable) { Ev.swallow(e) }
+    }
+
+    /** ¿El dedo está sobre una notificación? Entonces la pulsación larga es de la notificación, no de la galería. */
+    private fun overNotification(v: ViewGroup, ev: android.view.MotionEvent): Boolean {
+        try {
+            val id = v.resources.getIdentifier("notification_stack_scroller", "id", v.context.packageName)
+            if (id == 0) return false
+            val s = v.findViewById<View>(id) as? ViewGroup ?: return false
+            if (!s.isShown) return false
+            val loc = IntArray(2)
+            val rx = ev.rawX.toInt()
+            val ry = ev.rawY.toInt()
+            for (i in 0 until s.childCount) {
+                val c = s.getChildAt(i)
+                if (c.visibility != View.VISIBLE || c.width <= 0 || c.height <= 0) continue
+                c.getLocationOnScreen(loc)
+                if (rx >= loc[0] && rx <= loc[0] + c.width && ry >= loc[1] && ry <= loc[1] + c.height) return true
+            }
+        } catch (e: Throwable) { Ev.swallow(e) }
+        return false
+    }
+
+    /** Instantánea de la estructura del bloqueo (para el informe de diagnóstico). */
+    fun snap(why: String, force: Boolean) {
+        try {
+            val v = lastView?.get()
+            val r = if (v != null) root(v) else null
+            if (r == null) { Snap.note("todavía no hay una pantalla de bloqueo conocida (" + why + ")"); return }
+            Snap.write(r, why, debugState(), force)
+        } catch (e: Throwable) { Ev.swallow(e) }
+    }
+
+    fun debugState(): String {
+        val c = cont?.get()
+        return "estudio=" + (if (c == null) "no" else "sí w=" + c.width + " h=" + c.height + " hijos=" + c.childCount + " alpha=" + c.alpha + " ty=" + c.translationY + " adjunto=" + c.isAttachedToWindow) +
+            " · relojes de serie=" + stock.size + " · espejo=" + mirroring + " · construyendo=" + building + " · profundidad=" + (depthRef?.get() != null) +
+            " · errores=" + errs + " · anclas guardadas=" + savedTop.size + " · pulsación del sistema=" + lpHooked
     }
 
     /** Pone las notificaciones (y los iconos de AOD) justo debajo del contenedor del reloj. */
     private fun anchor(r: ViewGroup, cid: Int) {
+        saveAnchors(r, cid)
         val k = Class.forName("androidx.constraintlayout.widget.ConstraintSet", false, r.javaClass.classLoader)
         val cs = k.getConstructor().newInstance()
         for (i in 0 until r.childCount) { val ch = r.getChildAt(i); if (ch.id == View.NO_ID) ch.id = View.generateViewId() }

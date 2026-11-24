@@ -46,27 +46,31 @@ class WallCaptureActivity : Activity() {
     }
 
     private fun capture(): Boolean {
-        val vs = listOf(arrayOf("su", "-c"), arrayOf("/data/adb/ksu/bin/su", "-c"), arrayOf("/system/xbin/su", "-c"))
-        for (su in vs) {
-            try {
-                val p = ProcessBuilder(su[0], su[1], "screencap -p").start()
-                val bytes = p.inputStream.readBytes()
-                p.waitFor()
-                if (bytes.size < 5000) continue
-                val o = BitmapFactory.Options()
-                o.inJustDecodeBounds = true
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
-                if (o.outWidth <= 0) continue
-                var ss = 1
-                while (maxOf(o.outWidth, o.outHeight) / ss > 2000) ss *= 2
-                val o2 = BitmapFactory.Options()
-                o2.inSampleSize = ss
-                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o2) ?: continue
-                File(filesDir, "prev_bg.jpg").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
-                StudioWall.reset()
-                return true
-            } catch (e: Throwable) { }
+        try {
+            val bytes = Rx.bytes("screencap -p", 25)
+            if (bytes == null || bytes.size < 5000) {
+                RtLog.w("fondo", "screencap no devolvió una imagen (" + (bytes?.size ?: -1) + " bytes)")
+                return false
+            }
+            val o = BitmapFactory.Options()
+            o.inJustDecodeBounds = true
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+            if (o.outWidth <= 0) {
+                RtLog.w("fondo", "la captura no se puede leer como imagen")
+                return false
+            }
+            var ss = 1
+            while (maxOf(o.outWidth, o.outHeight) / ss > 2000) ss *= 2
+            val o2 = BitmapFactory.Options()
+            o2.inSampleSize = ss
+            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o2) ?: return false
+            File(filesDir, "prev_bg.jpg").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
+            StudioWall.reset()
+            RtLog.i("fondo", "captura del fondo guardada " + bmp.width + "x" + bmp.height)
+            return true
+        } catch (e: Throwable) {
+            RtLog.w("fondo", "la captura del fondo falló", e)
+            return false
         }
-        return false
     }
 }

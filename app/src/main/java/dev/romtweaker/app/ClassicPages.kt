@@ -467,8 +467,7 @@ class ClassicPages(val act: Activity, val ui: Ui, private val report: (String) -
                         JSONObject(c.second)
                         File(profDir(), File(f).name).writeText(c.second)
                         n++
-                    } catch (e: Exception) {
-                    }
+                    } catch (e: Exception) { RtLog.swallow(e) }
                 }
             }
             runOnUiThread {

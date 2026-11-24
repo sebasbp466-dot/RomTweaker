@@ -67,7 +67,7 @@ object IcxHide {
                 v.setRenderEffect(blank())
                 v.isClickable = false
                 v.isEnabled = false
-            } catch (e: Throwable) { }
+            } catch (e: Throwable) { Ev.swallow(e) }
         }
     }
 
@@ -87,7 +87,7 @@ object IcxHide {
         }
         if (cn == CLOCK && v is TextView) {
             val s = (prefs.getString("hx_clock_size", "0") ?: "0").toIntOrNull() ?: 0
-            if (s in 8..40) v.post { try { v.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, s.toFloat()) } catch (e: Throwable) { } }
+            if (s in 8..40) v.post { try { v.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, s.toFloat()) } catch (e: Throwable) { Ev.swallow(e) } }
         }
     }
 
@@ -99,10 +99,10 @@ object IcxHide {
                 try {
                     val v = chain.thisObject as? View
                     if (v != null && v.context.packageName == PKG) { IcxScan.view(x, v); onAttach(x, v, prefs) }
-                } catch (e: Throwable) { if (errs++ < 5) x.log(Log.WARN, TAG, "hx: " + Log.getStackTraceString(e)) }
+                } catch (e: Throwable) { if (errs++ < 5) Ev.warn(x, TAG, "hx: " + Log.getStackTraceString(e)) }
                 r
             }
-            x.log(Log.INFO, TAG, "hx: ocultar elementos instalado")
-        } catch (e: Throwable) { x.log(Log.WARN, TAG, "hx: fallo instalando " + e) }
+            Ev.info(x, TAG, "hx: ocultar elementos instalado")
+        } catch (e: Throwable) { Ev.warn(x, TAG, "hx: fallo instalando " + e) }
     }
 }

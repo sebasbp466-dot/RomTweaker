@@ -8,18 +8,26 @@ import io.github.libxposed.service.XposedServiceHelper
 class RtApp : Application(), XposedServiceHelper.OnServiceListener {
     override fun onCreate() {
         super.onCreate()
+        try { dev.romtweaker.app.RtLog.init(this) } catch (e: Throwable) { android.util.Log.w("RomTweaker", "RtLog: " + e) }
         try {
             val prev = Thread.getDefaultUncaughtExceptionHandler()
             Thread.setDefaultUncaughtExceptionHandler { t, e ->
-                try { java.io.File(filesDir, "crash.txt").writeText(java.util.Date().toString() + " [" + t.name + "]\n" + android.util.Log.getStackTraceString(e)) } catch (x: Throwable) { }
+                dev.romtweaker.app.CrashLog.record(this, t, e)
                 if (prev != null) prev.uncaughtException(t, e)
             }
-        } catch (e: Throwable) { }
-        try { XposedServiceHelper.registerListener(this) } catch (e: Throwable) { }
+        } catch (e: Throwable) { dev.romtweaker.app.RtLog.swallow(e) }
+        try { XposedServiceHelper.registerListener(this) } catch (e: Throwable) { dev.romtweaker.app.RtLog.swallow(e) }
     }
 
-    override fun onServiceBind(service: XposedService) { XpBridge.service = service; XpBridge.flush() }
-    override fun onServiceDied(service: XposedService) { XpBridge.service = null }
+    override fun onServiceBind(service: XposedService) {
+        XpBridge.service = service
+        XpBridge.flush()
+        dev.romtweaker.app.RtLog.i("lsposed", "conectado: " + XpBridge.status())
+    }
+    override fun onServiceDied(service: XposedService) {
+        XpBridge.service = null
+        dev.romtweaker.app.RtLog.w("lsposed", "el servicio de LSPosed se desconectó")
+    }
 }
 
 object XpBridge {

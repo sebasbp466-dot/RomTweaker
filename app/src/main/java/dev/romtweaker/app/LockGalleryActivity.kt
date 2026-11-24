@@ -588,12 +588,12 @@ class LockGalleryActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        try { setShowWhenLocked(true) } catch (e: Throwable) { }
+        try { setShowWhenLocked(true) } catch (e: Throwable) { RtLog.swallow(e) }
         try {
             window.setDecorFitsSystemWindows(false)
             window.insetsController?.hide(WindowInsets.Type.systemBars())
             window.insetsController?.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         val dm = resources.displayMetrics
         sw = dm.widthPixels
         sh = dm.heightPixels
@@ -680,7 +680,7 @@ class LockGalleryActivity : Activity() {
                 .setTitle("Fondo de las vistas previas")
                 .setItems(arrayOf("Capturar mi fondo (automático)", "Elegir una imagen", "Quitar el fondo elegido")) { _, w ->
                     when (w) {
-                        0 -> try { startActivityForResult(Intent(this, WallCaptureActivity::class.java), 93) } catch (e: Throwable) { }
+                        0 -> try { startActivityForResult(Intent(this, WallCaptureActivity::class.java), 93) } catch (e: Throwable) { RtLog.swallow(e) }
                         1 -> {
                             val it2 = Intent(Intent.ACTION_OPEN_DOCUMENT)
                             it2.addCategory(Intent.CATEGORY_OPENABLE)
@@ -746,7 +746,7 @@ class LockGalleryActivity : Activity() {
         override fun onSensorChanged(e: android.hardware.SensorEvent) {
             val gx = (-e.values[0] / 9.8f).coerceIn(-1f, 1f)
             val gy = (e.values[1] / 9.8f).coerceIn(-1f, 1f)
-            if (baseY.isNaN()) { baseY = gy; try { android.util.Log.i("RomTweaker", "gal: sensor activo (" + e.sensor.name + ")") } catch (x: Throwable) { } }
+            if (baseY.isNaN()) { baseY = gy; try { android.util.Log.i("RomTweaker", "gal: sensor activo (" + e.sensor.name + ")") } catch (x: Throwable) { RtLog.swallow(x) } }
             tiltX += (gx - tiltX) * 0.12f
             tiltY += ((gy - baseY) - tiltY) * 0.12f
             applyTilt()
@@ -789,11 +789,11 @@ class LockGalleryActivity : Activity() {
             sensors = getSystemService(SENSOR_SERVICE) as android.hardware.SensorManager
             val g = sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_GRAVITY)
             if (g != null) null
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
     }
 
     override fun onPause() {
-        try { sensors?.unregisterListener(sl) } catch (e: Throwable) { }
+        try { sensors?.unregisterListener(sl) } catch (e: Throwable) { RtLog.swallow(e) }
         super.onPause()
     }
 

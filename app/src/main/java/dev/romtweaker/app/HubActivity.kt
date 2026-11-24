@@ -91,6 +91,7 @@ class HubActivity : Activity() {
         }
         applyBlur()
         show(tab)
+        askCrash()
         Thread {
             val r = Sx.su("id -u")
             rootState = if (r.second.trim() == "0") "Concedido ✓" else "No disponible (${r.second.take(50)})"
@@ -103,8 +104,27 @@ class HubActivity : Activity() {
         outState.putInt("tab", tab)
     }
 
+    override fun onPause() {
+        super.onPause()
+        RtLog.watch(false)
+    }
+
+    private fun askCrash() {
+        try {
+            if (!CrashLog.pending(this)) return
+            CrashLog.clearPending(this)
+            android.app.AlertDialog.Builder(this)
+                .setTitle("RomTweaker se cerró")
+                .setMessage("La última vez la app se cerró de forma inesperada. Ya guardé un registro detallado del fallo. ¿Quieres enviarlo para que lo arreglen?")
+                .setPositiveButton("Enviar informe") { _, _ -> startActivity(Intent(this, HealthActivity::class.java).putExtra("auto", true)) }
+                .setNegativeButton("Ahora no", null)
+                .show()
+        } catch (e: Throwable) { RtLog.swallow(e) }
+    }
+
     override fun onResume() {
         super.onResume()
+        RtLog.watch(true)
         applyBlur()
         if (tab == 3 && ::scroll.isInitialized) refresh()
     }
@@ -139,6 +159,7 @@ class HubActivity : Activity() {
 
     private fun show(t: Int) {
         tab = t
+        RtLog.d("ui", "pestaña " + t)
         scroll.removeAllViews()
         val v = when (t) {
             0 -> pageHome()
@@ -196,10 +217,7 @@ class HubActivity : Activity() {
         val fq = RtFlow(this, m.dp(8))
         fq.addView(m.tonal("Reiniciar SystemUI") { Thread { Sx.su("killall com.android.systemui"); runOnUiThread { say("SystemUI reiniciado") } }.start() })
         fq.addView(m.tonal("Ver bloqueo") { Thread { Sx.su("input keyevent 223; sleep 1; input keyevent 224") }.start() })
-        fq.addView(m.tonal("Abrir LSPosed") {
-            val li = packageManager.getLaunchIntentForPackage("org.lsposed.manager")
-            if (li != null) startActivity(li) else say("Abre LSPosed desde su notificación")
-        })
+        fq.addView(m.tonal("Abrir LSPosed") { Lsp.open(this) { s -> say(s) } })
         cq.addView(fq, m.lp(m.MP, m.WC))
         add(p, cq)
 
@@ -305,10 +323,7 @@ class HubActivity : Activity() {
         c.addView(m.tv("Estado", 18f, m.onSurface, true))
         c.addView(m.tv(Xp.status(), 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 4, 0, 10))
         val row = LinearLayout(this)
-        row.addView(m.tonal("Abrir LSPosed") {
-            val i = packageManager.getLaunchIntentForPackage("org.lsposed.manager")
-            if (i != null) startActivity(i) else say("Abre LSPosed desde su notificación")
-        })
+        row.addView(m.tonal("Abrir LSPosed") { Lsp.open(this) { s -> say(s) } })
         row.addView(m.tonal("Reiniciar SystemUI") {
             Thread { Sx.su("killall com.android.systemui"); runOnUiThread { say("SystemUI reiniciado") } }.start()
         }, m.lp(m.WC, m.WC, 8, 0, 0, 0))
@@ -393,6 +408,12 @@ class HubActivity : Activity() {
         val ok = Build.VERSION.SDK_INT >= 31 && try { windowManager.isCrossWindowBlurEnabled } catch (e: Throwable) { false }
         c.addView(m.tv(if (ok) "Blur de ventana activo" else "Tu sistema tiene el blur desactivado (ahorro de batería o ajuste del desarrollador); se usa fondo sólido.", 12f, m.onSurfaceVar))
         add(p, c)
+
+        val cs = m.card()
+        cs.addView(m.tv("Salud y reportes", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 4))
+        cs.addView(m.tv("Comprueba que todo funcione y, si algo falla, envía un informe completo con un toque.", 14f, m.onSurfaceVar), m.lp(m.MP, m.WC, 0, 0, 0, 12))
+        cs.addView(m.filled("Abrir") { startActivity(Intent(this, HealthActivity::class.java)) })
+        add(p, cs)
 
         val c2 = m.card()
         c2.addView(m.tv("Mantenimiento", 18f, m.onSurface, true), m.lp(m.MP, m.WC, 0, 0, 0, 8))

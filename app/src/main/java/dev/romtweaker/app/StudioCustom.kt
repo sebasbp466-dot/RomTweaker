@@ -99,7 +99,7 @@ class CustomClockView(ctx: Context) : View(ctx) {
             boxH = (j.optJSONObject("box")?.optDouble("h", 100.0) ?: 100.0).toFloat().coerceIn(30f, 260f)
             val a = els
             if (a != null) for (i in 0 until a.length()) { val e = a.optJSONObject(i); if (e != null && e.optString("type") == "hand" && e.optString("which") == "second") hasSec = true }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         removeCallbacks(secTick)
         if (hasSec && isAttachedToWindow) post(secTick)
         requestLayout()
@@ -130,7 +130,7 @@ class CustomClockView(ctx: Context) : View(ctx) {
         try {
             val bi = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
             if (bi != null) { val l = bi.getIntExtra("level", 100); val sc2 = bi.getIntExtra("scale", 100); if (sc2 > 0) bat = l * 100 / sc2 }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         hr = a; mi = b; sc = sv
         invalidate()
     }
@@ -185,11 +185,11 @@ class CustomClockView(ctx: Context) : View(ctx) {
             f == "mono" -> pt.typeface = Typeface.create(Typeface.MONOSPACE, w, false)
             f in StudioFont.assetFonts && StudioFont.asset(context, f) != null -> {
                 pt.typeface = StudioFont.asset(context, f)
-                if (f in StudioFont.varFonts) try { pt.setFontVariationSettings("'wght' $w") } catch (x: Throwable) { }
+                if (f in StudioFont.varFonts) try { pt.setFontVariationSettings("'wght' $w") } catch (x: Throwable) { RtLog.swallow(x) }
             }
             else -> {
                 pt.typeface = StudioFont.get()
-                try { pt.setFontVariationSettings("'wght' $w,'wdth' ${e.optInt("wdth", 100)},'ROND' ${e.optInt("rond", 0)}") } catch (x: Throwable) { }
+                try { pt.setFontVariationSettings("'wght' $w,'wdth' ${e.optInt("wdth", 100)},'ROND' ${e.optInt("rond", 0)}") } catch (x: Throwable) { RtLog.swallow(x) }
             }
         }
     }
@@ -206,7 +206,7 @@ class CustomClockView(ctx: Context) : View(ctx) {
         c.translate(pad, pad)
         for (i in 0 until a.length()) {
             val e = a.optJSONObject(i) ?: continue
-            try { drawEl(c, e, u) } catch (x: Throwable) { }
+            try { drawEl(c, e, u) } catch (x: Throwable) { RtLog.swallow(x) }
         }
         c.restore()
     }
@@ -398,7 +398,7 @@ class CustomClockView(ctx: Context) : View(ctx) {
 
     fun applyFx() {
         val cols = StudioColor.resolve(context, cfg)
-        if (!StudioFx.needs(cfg)) { if (android.os.Build.VERSION.SDK_INT >= 31) post { try { setRenderEffect(null) } catch (e: Throwable) { } }; return }
+        if (!StudioFx.needs(cfg)) { if (android.os.Build.VERSION.SDK_INT >= 31) post { try { setRenderEffect(null) } catch (e: Throwable) { RtLog.swallow(e) } }; return }
         StudioFx.apply(this, cfg, cols.first, cols.second)
     }
 

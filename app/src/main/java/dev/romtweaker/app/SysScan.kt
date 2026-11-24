@@ -47,8 +47,7 @@ object SysScan {
                     }
                 }
             }
-        } catch (e: Throwable) {
-        }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         return found
     }
 

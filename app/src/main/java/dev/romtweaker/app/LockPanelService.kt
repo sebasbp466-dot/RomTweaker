@@ -40,9 +40,9 @@ class LockPanelService : Service() {
             nm.createNotificationChannel(NotificationChannel("lockpanel", "Panel del reloj", NotificationManager.IMPORTANCE_MIN))
             val n = Notification.Builder(this, "lockpanel").setSmallIcon(android.R.drawable.ic_menu_edit).setContentTitle("Panel del reloj de bloqueo activo").build()
             if (Build.VERSION.SDK_INT >= 34) startForeground(7, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(7, n)
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         Thread {
-            try { Sx.su("appops set " + packageName + " SYSTEM_ALERT_WINDOW allow") } catch (e: Throwable) { }
+            try { Sx.su("appops set " + packageName + " SYSTEM_ALERT_WINDOW allow") } catch (e: Throwable) { RtLog.swallow(e) }
             Handler(Looper.getMainLooper()).post { show() }
         }.start()
         return START_STICKY
@@ -115,7 +115,7 @@ class LockPanelService : Service() {
     }
 
     override fun onDestroy() {
-        try { view?.let { wm?.removeView(it) } } catch (e: Throwable) { }
+        try { view?.let { wm?.removeView(it) } } catch (e: Throwable) { RtLog.swallow(e) }
         view = null
         super.onDestroy()
     }

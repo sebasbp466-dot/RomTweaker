@@ -95,7 +95,7 @@ class FlexPreview(ctx: Context) : View(ctx) {
                     val t = Typeface.createFromFile(f)
                     if (supports(t)) { tf = t; fontName = f.name; return }
                 }
-            } catch (e: Throwable) { }
+            } catch (e: Throwable) { RtLog.swallow(e) }
         }
         try {
             val ai = context.packageManager.getApplicationInfo("com.android.systemui", 0)
@@ -115,7 +115,7 @@ class FlexPreview(ctx: Context) : View(ctx) {
                 if (t != null && supports(t)) { tf = t; fontName = e.name; zf.close(); return }
             }
             zf.close()
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         for (fam in listOf("google-sans-flex-clock", "google-sans-flex", "google-sans-clock", "google-sans", "sans-serif")) {
             val t = Typeface.create(fam, Typeface.NORMAL)
             if (supports(t)) { tf = t; fontName = fam; return }
@@ -136,7 +136,7 @@ class FlexPreview(ctx: Context) : View(ctx) {
         p.typeface = tf
         p.color = Color.WHITE
         p.textAlign = Paint.Align.CENTER
-        try { p.setFontVariationSettings("'wght' " + cfg.weight + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { }
+        try { p.setFontVariationSettings("'wght' " + cfg.weight + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { RtLog.swallow(e) }
         val mt = metrics
         if (mt != null) {
             c.translate(0f, padTop)
@@ -192,7 +192,7 @@ class FlexPreview(ctx: Context) : View(ctx) {
                 rs.setFloatUniform("c1", Color.red(col) / 255f, Color.green(col) / 255f, Color.blue(col) / 255f, a1)
                 rs.setFloatUniform("c2", Color.red(c2) / 255f, Color.green(c2) / 255f, Color.blue(c2) / 255f, a2)
                 setRenderEffect(RenderEffect.createRuntimeShaderEffect(rs, "inp"))
-            } catch (e: Throwable) { }
+            } catch (e: Throwable) { RtLog.swallow(e) }
         }
     }
 

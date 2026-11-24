@@ -8,6 +8,20 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <queries>
+        <package android:name="org.lsposed.manager" />
+        <package android:name="org.matrix.vector.manager" />
+        <package android:name="org.matrix.vector" />
+        <package android:name="io.github.lsposed.manager" />
+        <package android:name="com.lsposed.manager" />
+        <package android:name="me.weishu.kernelsu" />
+        <package android:name="com.rifsxd.ksunext" />
+        <package android:name="com.sukisu.ultra" />
+        <package android:name="com.topjohnwu.magisk" />
+        <package android:name="io.github.vvb2060.magisk" />
+        <package android:name="me.bmax.apatch" />
+        <package android:name="com.android.systemui" />
+    </queries>
     <application android:description="@string/rt_desc" android:name="dev.romtweaker.app.xp.RtApp"
         android:label="RomTweaker"
         android:allowBackup="false"
@@ -29,7 +43,7 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="control_center_overlay" />
         </service>
-        <receiver android:name=".BootReceiver" android:exported="true">
+        <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
@@ -47,7 +61,7 @@
     <service android:name=".LockService" android:exported="false" android:foregroundServiceType="specialUse">
         <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="custom lockscreen" />
     </service>
-    <receiver android:name=".LockBootReceiver" android:exported="true">
+    <receiver android:name=".LockBootReceiver" android:exported="false">
         <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
     </receiver>
     <receiver android:name=".ClockMetricsReceiver" android:exported="true">
@@ -63,5 +77,10 @@
         android:showWhenLocked="true" android:excludeFromRecents="true" android:launchMode="singleTask"
         android:configChanges="orientation|screenSize|keyboardHidden|uiMode" />
     <activity android:name=".WallCaptureActivity" android:exported="false" android:theme="@style/RtCapTheme" android:showWhenLocked="true" android:excludeFromRecents="true" />
+    <activity android:name=".HealthActivity" android:exported="false" android:theme="@style/HubTheme" android:label="Salud y reportes" />
+    <receiver android:name=".ModuleEventReceiver" android:exported="true">
+        <intent-filter><action android:name="dev.romtweaker.app.MODULE_EVENT" /></intent-filter>
+    </receiver>
+    <provider android:name=".RtShare" android:authorities="dev.romtweaker.app.share" android:exported="false" android:grantUriPermissions="true" />
 </application>
 </manifest>

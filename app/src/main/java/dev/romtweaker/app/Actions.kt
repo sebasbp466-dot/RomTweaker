@@ -30,28 +30,48 @@ object Adapt {
         { c -> arrayOf("/su/bin/su", "-c", c) }
     )
 
-    fun suName(): String = if (suVariant < 0) "sin detectar" else suNames[suVariant]
+    @Volatile
+    private var found = false
+
+    @Volatile
+    private var detectedAt = 0L
+
+    fun suName(): String = if (suVariant < 0) "sin detectar" else if (found) suNames[suVariant] else "sin root (" + suNames[suVariant] + ")"
 
     @Synchronized
     fun suCmd(cmd: String): Array<String> {
-        if (suVariant < 0) detect()
+        if (suVariant < 0 || (!found && System.currentTimeMillis() - detectedAt > 60000L)) detect()
         return suBuilders[suVariant](cmd)
     }
 
     private fun detect() {
+        detectedAt = System.currentTimeMillis()
         for (i in suBuilders.indices) {
             try {
                 val p = Runtime.getRuntime().exec(suBuilders[i]("id"))
-                val out = p.inputStream.bufferedReader().readText()
-                p.waitFor()
-                if (out.contains("uid=0")) {
+                val sb = StringBuilder()
+                val rd = Thread { try { sb.append(p.inputStream.bufferedReader().readText()) } catch (e: Exception) { RtLog.swallow(e) } }
+                rd.start()
+                if (!p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    try { p.destroyForcibly() } catch (e: Exception) { RtLog.swallow(e) }
+                    rd.join(300)
+                    RtLog.w("root", "su sin respuesta en 30 s: " + suNames[i])
+                    continue
+                }
+                rd.join(2000)
+                if (sb.contains("uid=0")) {
                     suVariant = i
+                    found = true
+                    RtLog.i("root", "su detectado: " + suNames[i])
                     return
                 }
             } catch (e: Exception) {
+                RtLog.swallow(e)
             }
         }
-        suVariant = 0
+        if (suVariant < 0) suVariant = 0
+        found = false
+        RtLog.w("root", "no se detectó ningún su con uid=0 (se usará «su -c»)")
     }
 
     private fun bad(r: Pair<Int, String>): Boolean {
@@ -83,11 +103,13 @@ object Adapt {
                 st.edit().putInt(key + "|ok", st.getInt(key + "|ok", 0) + 1).apply()
                 prefs.edit().putString(feature, s.name).apply()
                 val extra = if (fails.isEmpty()) "" else "\n(descartados antes:" + fails + ")"
+                RtLog.i("adapt", feature + " · método «" + s.name + "» ✓")
                 return "✓ " + feature + " · método «" + s.name + "»" + extra
             }
             st.edit().putInt(key + "|bad", st.getInt(key + "|bad", 0) + 1).apply()
             fails.append("\n  ✗ ").append(s.name).append(": ").append(r.second.lines().firstOrNull() ?: "")
         }
+        RtLog.w("adapt", feature + ": ningún método funcionó" + fails)
         return "✗ " + feature + ": ningún método funcionó" + fails
     }
 

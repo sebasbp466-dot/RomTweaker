@@ -82,7 +82,7 @@ object StudioAI {
         c.setRequestProperty("x-goog-api-key", key)
         c.outputStream.use { it.write(body.toString().toByteArray()) }
         val code = c.responseCode
-        val txt = try { ((if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }) ?: "" } finally { try { c.disconnect() } catch (e: Throwable) { } }
+        val txt = try { ((if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }) ?: "" } finally { try { c.disconnect() } catch (e: Throwable) { RtLog.swallow(e) } }
         if (code !in 200..299) {
             val msg = when (code) {
                 400 -> "Petición no válida (revisa la clave)"
@@ -130,7 +130,7 @@ object StudioAI {
         for (m in models) {
             try { return call(key, m, body) } catch (e: Soft) {
                 last = e
-                try { Thread.sleep(600) } catch (x: Throwable) { }
+                try { Thread.sleep(600) } catch (x: Throwable) { RtLog.swallow(x) }
             } catch (e: java.io.IOException) {
                 last = e
             }

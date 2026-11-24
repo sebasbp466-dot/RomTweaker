@@ -65,7 +65,7 @@ object LockStudio {
         val now = System.currentTimeMillis()
         if (now - blinkAt < 4000L) return
         blinkAt = now
-        Thread { try { Sx.su("input keyevent 223; sleep 1; input keyevent 224") } catch (e: Throwable) { } }.start()
+        Thread { try { Sx.su("input keyevent 223; sleep 1; input keyevent 224") } catch (e: Throwable) { RtLog.swallow(e) } }.start()
     }
 
     fun wallpaper(act: Activity): Drawable? {
@@ -96,7 +96,7 @@ object LockStudio {
         if (StudioWall.cached() == null && !StudioWall.attempted()) {
             Thread {
                 StudioWall.get(act)
-                try { act.runOnUiThread { if (StudioWall.cached() != null) refresh() } } catch (e: Throwable) { }
+                try { act.runOnUiThread { if (StudioWall.cached() != null) refresh() } } catch (e: Throwable) { RtLog.swallow(e) }
             }.start()
         }
         val wd = wallpaper(act)

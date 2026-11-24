@@ -70,8 +70,7 @@ object IcoPreview {
                 ai.publicSourceDir = f.absolutePath
                 r = pm.getResourcesForApplication(ai)
             }
-        } catch (e: Throwable) {
-        }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         synchronized(resCache) { resCache[part.id] = r }
         return r
     }
@@ -88,8 +87,7 @@ object IcoPreview {
                     }
                 }
             }
-        } catch (e: Throwable) {
-        }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         return out.distinct().sorted()
     }
 
@@ -117,8 +115,7 @@ object IcoPreview {
                     if (d is VectorDrawable) d.setTint(tint)
                     out.add(d)
                     n++
-                } catch (e: Throwable) {
-                }
+                } catch (e: Throwable) { RtLog.swallow(e) }
             }
         }
         return Pv(shape, out)

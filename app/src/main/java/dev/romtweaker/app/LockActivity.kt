@@ -92,7 +92,7 @@ class LockActivity : Activity() {
                     ic.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 }
             }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
 
         userPresent = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) { finish() }
@@ -113,7 +113,7 @@ class LockActivity : Activity() {
     override fun onBackPressed() {}
 
     override fun onDestroy() {
-        try { userPresent?.let { unregisterReceiver(it) } } catch (e: Throwable) { }
+        try { userPresent?.let { unregisterReceiver(it) } } catch (e: Throwable) { RtLog.swallow(e) }
         super.onDestroy()
     }
 }
@@ -152,7 +152,7 @@ class LockService : Service() {
     }
 
     override fun onDestroy() {
-        try { rcv?.let { unregisterReceiver(it) } } catch (e: Throwable) { }
+        try { rcv?.let { unregisterReceiver(it) } } catch (e: Throwable) { RtLog.swallow(e) }
         super.onDestroy()
     }
 }
@@ -160,7 +160,7 @@ class LockService : Service() {
 class LockBootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         if (c.getSharedPreferences("lock", Context.MODE_PRIVATE).getBoolean("lock_on", false)) {
-            try { c.startForegroundService(Intent(c, LockService::class.java)) } catch (e: Throwable) { }
+            try { c.startForegroundService(Intent(c, LockService::class.java)) } catch (e: Throwable) { RtLog.swallow(e) }
         }
     }
 }

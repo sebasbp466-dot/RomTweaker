@@ -120,7 +120,7 @@ class StudioCfg {
                         "cs" -> c.cs = java.net.URLDecoder.decode(v, "UTF-8")
                         "sig" -> c.sig = java.net.URLDecoder.decode(v, "UTF-8")
                     }
-                } catch (e: Throwable) { }
+                } catch (e: Throwable) { RtLog.swallow(e) }
             }
             return c
         }
@@ -149,7 +149,7 @@ object StudioFont {
         try {
             val am = if (ctx.packageName == APP) ctx.assets else ctx.createPackageContext(APP, 0).assets
             t = Typeface.createFromAsset(am, "fonts/$name.ttf")
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         assets[name] = t
         return t
     }
@@ -165,7 +165,7 @@ object StudioFont {
                     val t = Typeface.createFromFile(f)
                     if (supports(t)) { r = t; found = true; break }
                 }
-            } catch (e: Throwable) { }
+            } catch (e: Throwable) { RtLog.swallow(e) }
         }
         if (!found) {
             for (fam in listOf("google-sans-flex-clock", "google-sans-flex", "google-sans-clock", "google-sans", "sans-serif")) {
@@ -196,11 +196,11 @@ object StudioWall {
     private fun suBytes(su: Array<String>, cmd: String): ByteArray {
         val p = ProcessBuilder(su[0], su[1], cmd).redirectErrorStream(false).start()
         val box = arrayOfNulls<ByteArray>(1)
-        val t = Thread { try { box[0] = p.inputStream.readBytes() } catch (e: Throwable) { } }
+        val t = Thread { try { box[0] = p.inputStream.readBytes() } catch (e: Throwable) { RtLog.swallow(e) } }
         t.start()
         t.join(15000)
-        if (t.isAlive) { try { p.destroyForcibly() } catch (e: Throwable) { }; return ByteArray(0) }
-        try { p.waitFor() } catch (e: Throwable) { }
+        if (t.isAlive) { try { p.destroyForcibly() } catch (e: Throwable) { RtLog.swallow(e) }; return ByteArray(0) }
+        try { p.waitFor() } catch (e: Throwable) { RtLog.swallow(e) }
         return box[0] ?: ByteArray(0)
     }
 
@@ -210,7 +210,7 @@ object StudioWall {
         try {
             val t = String(suBytes(arrayOf("su", "-c"), "ls /data/system/users/0/"))
             for (n in t.split("\n")) { val x = n.trim(); if (x.startsWith("wallpaper") && !x.endsWith(".xml") && !l.contains(x)) l.add(x) }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         return l
     }
 
@@ -229,8 +229,8 @@ object StudioWall {
                     val o2 = BitmapFactory.Options()
                     o2.inSampleSize = ss
                     val b = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o2)
-                    if (b != null) { try { android.util.Log.i("RomTweaker", "wall: fondo leído con root ($name ${b.width}x${b.height})") } catch (e: Throwable) { }; return b }
-                } catch (e: Throwable) { }
+                    if (b != null) { try { android.util.Log.i("RomTweaker", "wall: fondo leído con root ($name ${b.width}x${b.height})") } catch (e: Throwable) { RtLog.swallow(e) }; return b }
+                } catch (e: Throwable) { RtLog.swallow(e) }
             }
         }
         return null
@@ -250,7 +250,7 @@ object StudioWall {
                 o2.inSampleSize = ss
                 BitmapFactory.decodeFile(pf.path, o2)?.let { return it }
             }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         if (ctx.packageName == FONT_APP) { rootLoad(max)?.let { return it } }
         try {
             val wm = WallpaperManager.getInstance(ctx)
@@ -285,7 +285,7 @@ object StudioWall {
             }
             if (out == null) {
                 var d2: android.graphics.drawable.Drawable? = try { wm.builtInDrawable } catch (e: Throwable) { null }
-                if (d2 == null) try { d2 = wm.wallpaperInfo?.loadThumbnail(ctx.packageManager) } catch (e: Throwable) { }
+                if (d2 == null) try { d2 = wm.wallpaperInfo?.loadThumbnail(ctx.packageManager) } catch (e: Throwable) { RtLog.swallow(e) }
                 if (d2 != null && d2.intrinsicWidth > 0) {
                     val s2 = max.toFloat() / maxOf(d2.intrinsicWidth, d2.intrinsicHeight)
                     val w2 = maxOf(1, (d2.intrinsicWidth * s2).toInt())
@@ -296,7 +296,7 @@ object StudioWall {
                     out = b2
                 }
             }
-        } catch (e: Throwable) { }
+        } catch (e: Throwable) { RtLog.swallow(e) }
         return out
     }
 
@@ -402,8 +402,8 @@ object StudioFx {
                 v.setRenderEffect(RenderEffect.createRuntimeShaderEffect(rs, "inp"))
             } catch (e: Throwable) {
                 lastError = e.toString()
-                try { android.util.Log.w("RomTweaker", "fx: shader no válido, uso sólido: $e") } catch (x: Throwable) { }
-                try { v.setRenderEffect(null) } catch (x: Throwable) { }
+                try { android.util.Log.w("RomTweaker", "fx: shader no válido, uso sólido: $e") } catch (x: Throwable) { RtLog.swallow(x) }
+                try { v.setRenderEffect(null) } catch (x: Throwable) { RtLog.swallow(x) }
             }
         }
     }
@@ -493,11 +493,11 @@ class DigitsView(ctx: Context) : View(ctx) {
             f == "mono" -> p.typeface = Typeface.create(Typeface.MONOSPACE, cfg.wght.coerceIn(100, 900), false)
             f in StudioFont.assetFonts && StudioFont.asset(context, f) != null -> {
                 p.typeface = StudioFont.asset(context, f)
-                if (f in StudioFont.varFonts) try { p.setFontVariationSettings("'wght' " + cfg.wght) } catch (e: Throwable) { }
+                if (f in StudioFont.varFonts) try { p.setFontVariationSettings("'wght' " + cfg.wght) } catch (e: Throwable) { RtLog.swallow(e) }
             }
             else -> {
                 p.typeface = StudioFont.get()
-                try { p.setFontVariationSettings("'wght' " + cfg.wght + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { }
+                try { p.setFontVariationSettings("'wght' " + cfg.wght + ",'wdth' " + cfg.wdth + ",'ROND' " + cfg.rond + ",'slnt' " + cfg.slnt) } catch (e: Throwable) { RtLog.swallow(e) }
             }
         }
         if (cfg.ol == 1) {
@@ -614,7 +614,7 @@ class DigitsView(ctx: Context) : View(ctx) {
 
     fun applyFx() {
         val cols = StudioColor.resolve(context, cfg)
-        if (!StudioFx.needs(cfg)) { if (Build.VERSION.SDK_INT >= 31) post { try { setRenderEffect(null) } catch (e: Throwable) { } }; return }
+        if (!StudioFx.needs(cfg)) { if (Build.VERSION.SDK_INT >= 31) post { try { setRenderEffect(null) } catch (e: Throwable) { RtLog.swallow(e) } }; return }
         StudioFx.apply(this, cfg, cols.first, cols.second)
     }
 
@@ -782,7 +782,7 @@ class AnalogView(ctx: Context) : View(ctx) {
 
     fun applyFx() {
         val cols = StudioColor.resolve(context, cfg)
-        if (!StudioFx.needs(cfg)) { if (Build.VERSION.SDK_INT >= 31) post { try { setRenderEffect(null) } catch (e: Throwable) { } }; return }
+        if (!StudioFx.needs(cfg)) { if (Build.VERSION.SDK_INT >= 31) post { try { setRenderEffect(null) } catch (e: Throwable) { RtLog.swallow(e) } }; return }
         StudioFx.apply(this, cfg, cols.first, cols.second)
     }
 
@@ -895,7 +895,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
 
     private fun tintAll(v: View, col: Int, glow: Float) {
         if (v is TextView) { v.setTextColor(col); if (glow > 0f) v.setShadowLayer(glow, 0f, 0f, col) else v.setShadowLayer(0f, 0f, 0f, 0) }
-        if (v is ImageView) try { v.setColorFilter(col) } catch (e: Throwable) { }
+        if (v is ImageView) try { v.setColorFilter(col) } catch (e: Throwable) { RtLog.swallow(e) }
         if (v is ViewGroup) for (i in 0 until v.childCount) tintAll(v.getChildAt(i), col, glow)
     }
 
@@ -910,7 +910,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
             if (c.ic != 10) titleAll(v)
             StudioUnclip.all(v)
             holder.addView(v, FrameLayout.LayoutParams(-2, -2))
-        } catch (e: Throwable) { try { android.util.Log.w("RomTweaker", "ic: holder $e") } catch (x: Throwable) { } }
+        } catch (e: Throwable) { try { android.util.Log.w("RomTweaker", "ic: holder $e") } catch (x: Throwable) { RtLog.swallow(x) } }
     }
 
     fun applyConfig(c: StudioCfg) {
@@ -930,7 +930,7 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         dateTv.visibility = if (c.date && !ic && !cu) VISIBLE else GONE
         dateTv.setTextColor(cols.first)
         dateTv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, (c.size * c.sc / 100f * 0.10f).coerceIn(11f, 44f))
-        try { dateTv.fontVariationSettings = "'wght' 500" } catch (e: Throwable) { }
+        try { dateTv.fontVariationSettings = "'wght' 500" } catch (e: Throwable) { RtLog.swallow(e) }
         sigTv.setTextColor(cols.first)
         sigTv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, (c.size * c.sc / 100f * 0.085f).coerceIn(10f, 36f))
         refreshSig()
@@ -1033,13 +1033,13 @@ class StudioClock(ctx: Context) : LinearLayout(ctx) {
         f.addAction(Intent.ACTION_TIME_TICK)
         f.addAction(Intent.ACTION_TIME_CHANGED)
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED)
-        try { context.registerReceiver(r, f) } catch (e: Throwable) { }
+        try { context.registerReceiver(r, f) } catch (e: Throwable) { RtLog.swallow(e) }
         refreshDate()
         if (cfg.ic > 0 || cfg.layout == "analog" || cfg.layout == "custom") applyConfig(cfg) else { digits.refresh(); digits.applyFx() }
     }
 
     override fun onDetachedFromWindow() {
-        rcv?.let { try { context.unregisterReceiver(it) } catch (e: Throwable) { } }
+        rcv?.let { try { context.unregisterReceiver(it) } catch (e: Throwable) { RtLog.swallow(e) } }
         rcv = null
         super.onDetachedFromWindow()
     }
